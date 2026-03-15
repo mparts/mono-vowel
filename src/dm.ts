@@ -40,7 +40,6 @@ function getTopIntent(context: DMContext, threshold = 0.7): string | undefined {
   return top.confidenceScore >= threshold ? top.category : undefined;
 }
 
-
 function getEntity(context: DMContext, category: string): string | undefined {
   const ent = context.interpretation?.entities.find(e => e.category === category);
   if (!ent) return undefined;
@@ -55,21 +54,37 @@ function getEntity(context: DMContext, category: string): string | undefined {
 // == GAME helpers ======================================================================================================
 function extractCategory(result: string): string | null {
   const normalized = result.trim().toLowerCase();
-  if (["animals and creatures", "food and drink", "geography and countries",
-    "nature and science", "objects and items"].some((cat) => cat === normalized)) return normalized;
-  const map: Record<string, string> = {
-    "animals": "animals and creatures",
-    "creatures": "animals and creatures",
-    "food": "food and drink",
-    "drink": "food and drink",
-    "countries": "geography and countries",
-    "geography": "geography and countries",
-    "science": "nature and science",
-    "nature": "nature and science",
-    "items": "objects and items",
-    "objects": "objects and items",
+  // Categories
+  const categories = [
+    "animals and creatures",
+    "food and drink",
+    "geography and countries",
+    "nature and science",
+    "objects and items"
+  ];
+  const directMatch = categories.find(cat =>
+    normalized.includes(cat)
+  );
+  if (directMatch) return directMatch;
+  const synonymGroups: Record<string, string[]> = {
+    "animals and creatures": ["animals", "creatures", "animal", "creature"],
+    "food and drink": ["food", "drink", "foods", "drinks"],
+    "geography and countries": ["geography", "countries", "country"],
+    "nature and science": ["nature", "science"],
+    "objects and items": ["objects", "items", "object", "item"]
   };
-  return map[normalized] ?? null;
+  for (const [category, synonyms] of Object.entries(synonymGroups)) {
+    if (synonyms.some(s => normalized.includes(s))) {
+      return category;
+    }
+  }
+  // Random category
+  const randomKeywords = ["random", "any", "whatever", "surprise me", "anything"];
+  if (randomKeywords.some(k => normalized.includes(k))) {
+    const index = Math.floor(Math.random() * categories.length);
+    return categories[index];
+  }
+  return "";
 }
 
 function extractVowel(result: string): string | null {
@@ -111,23 +126,12 @@ const dmMachine = setup({
     events: {} as DMEvents,
   },
   actions: {
-    "spst.speak": ({ context }, params: { utterance: string }) => {
-      console.log("SPEAKING:", params.utterance); 
-      context.spstRef.send({
-        type: "SPEAK",
-        value: { utterance: params.utterance },
-      });
-    },
+    "spst.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
+      context.spstRef.send({ type: "SPEAK",value: { utterance: params.utterance }});},
     "spst.listen": ({ context }) =>
-      context.spstRef.send({
-        type: "LISTEN",
-        value: { nlu: true },
-      }),
+      context.spstRef.send({ type: "LISTEN", value: { nlu: true }}),
     "storeCommand": assign(({ event }) => ({
-      lastCommand: (event as any).value?.[0]?.utterance?.trim().toLowerCase(),
-      lastResult: null,
-      interpretation: null,
-    })),
+      lastCommand: (event as any).value?.[0]?.utterance?.trim().toLowerCase(), lastResult: null, interpretation: null,})),
     "clearCache": assign({ lastResult: null, interpretation: null }),
   },
 }).createMachine({
@@ -138,7 +142,7 @@ const dmMachine = setup({
     confirm: false,
     targetVowel: "u",
     targetCategory: "",
-    targetGameMode: "ChooseRepeatGame",
+    targetGameMode: "Echo",
     lastCommand: null as string | null,
   }),
   id: "DM",
@@ -169,14 +173,15 @@ const dmMachine = setup({
         },
         // == Exit ======================================================================================================
         Done: {
-          entry: assign({
+          entry: [assign({
             lastResult: null,
             interpretation: null,
-            targetVowel: "",
+            confirm: false,
+            targetVowel: "u",
             targetCategory: "",
-            targetGameMode: "",
+            targetGameMode: "Echo",
             lastCommand: null as string | null,
-          }),
+          }), { type: "spst.speak", params: { utterance: "Thanks for playing!!!" } }],
           on: { CLICK: "#Boot.Greeting" },
         },
         // == Global Command Handler ====================================================================================
@@ -192,7 +197,7 @@ const dmMachine = setup({
                 { target: "#MainMenu.GetVowel", guard: ({ context }) => context.lastCommand === "change vowel",
                   actions: assign({ targetVowel: "" }) },
                 { target: "#MainMenu.GetWordCategory", guard: ({ context }) => context.lastCommand === "change category",
-                  actions: assign({ targetCategory: "" }) },                
+                  actions: assign({ targetCategory: "" }) },
                 { target: "#MainMenu.GetGameMode", guard: ({ context }) => context.lastCommand === "change mode",
                   actions: assign({ targetGameMode: "" }) },
               ],
@@ -327,9 +332,19 @@ const dmMachine = setup({
               ],
             },
             CheckCompatibility: {
-              entry: assign(({ context }) => ({targetGameMode: getTopIntent(context) ?? ""})),
+              entry: assign(({ context }) => {
+                const intent = getTopIntent(context);
+                const modeMap: Record<string, string> = {
+                  ChooseRepeatGame: "Echo",
+                  ChooseMultiplayer: "Multiplayer",
+                  ChooseSinglePlayer: "Singleplayer"
+                };
+                return {
+                  targetGameMode: intent ? modeMap[intent] ?? "" : ""
+                };
+              }),
               always: [
-                { target: "CheckExistence", guard: ({ context }) => !!context.targetGameMode, actions: {type: "clearCache"} },
+                { target: "CheckExistence", guard: ({ context }) => !!context.targetGameMode, actions: { type: "clearCache" } },
                 { target: "FallbackError" }
               ]
             },
@@ -490,9 +505,9 @@ const dmMachine = setup({
             },
         modePicker: {
           always: [
-            { target: "EchoMode", guard: ({ context }) => context.targetGameMode === "ChooseRepeatGame",},
-            { target: "Multiplayer", guard: ({ context }) => context.targetGameMode === "ChooseMultiplayer", },
-            { target: "Singleplayer", guard: ({ context }) => context.targetGameMode === "ChooseSinglePlayer",},
+            { target: "EchoMode", guard: ({ context }) => context.targetGameMode === "Echo",},
+            { target: "Multiplayer", guard: ({ context }) => context.targetGameMode === "Multiplayer", },
+            { target: "Singleplayer", guard: ({ context }) => context.targetGameMode === "Singleplayer",},
             { target: "#MainMenu.GetGameMode" },
           ],
         },
