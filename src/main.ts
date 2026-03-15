@@ -1,5 +1,5 @@
 import "./style.css";
-import { setupButton } from "./dm.ts";
+import { dmActor } from "./state_machine/dm.ts";
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <div>
@@ -8,5 +8,17 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
     </div>
   </div>
 `;
+
+function setupButton(element: HTMLButtonElement) {
+  element.addEventListener("click", () => {
+    dmActor.send({ type: "CLICK" });
+  });
+  dmActor.subscribe((snapshot) => {
+    const meta: { view?: string } = Object.values(
+      snapshot.context.spstRef.getSnapshot().getMeta(),
+    )[0] || { view: undefined };
+    element.innerHTML = `${meta.view}`;
+  });
+}
 
 setupButton(document.querySelector<HTMLButtonElement>("#counter")!);

@@ -9,8 +9,6 @@
 
 - randomize confirm and get utterances
 - divide natur-science categories
-- Prevent numbers, ask for user utterance repeat. OR add number functionality!!
-- functionality to grab everything in one utterance
 - more global commands
 - better feadback to user
 
@@ -19,3 +17,8 @@
 - add llm api to conversate, or decypher user utterance
 - complete singleplayer
 - complete multiplayer
+
+## KNOWN BUGS
+
+- Pronoun "I" cannot be skipped, always grabbed as a vowel. SOLUTION: Removed from NLU, can only be grabbed on its own by regex
+- Numbers in utterance prevent the vowel change.

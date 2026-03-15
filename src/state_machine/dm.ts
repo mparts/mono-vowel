@@ -1,150 +1,12 @@
-// == Imports ===========================================================================================================
 import { assign, createActor, setup, } from "xstate";
-import type { Settings } from "speechstate";
 import { speechstate } from "speechstate";
-import { KEY, NLU_KEY } from "./azure";
 import type { DMContext, DMEvents } from "./types";
+import { settings } from "../azure/azure_credentials";
+import { getTopIntent, getEntity, getEntityResolution } from "./helpers"; // NLU helpers
+import {extractCategory, extractVowel, changeVowels} from "./helpers"; // Game helpers
+import {isGlobalCommand, buildConfirmationUtterance} from "./helpers"; // General helpers
 
-
-// == Azure Related Credentials =========================================================================================
-const azureCredentials = {
-  endpoint:
-    "https://swedencentral.api.cognitive.microsoft.com/sts/v1.0/issuetoken",
-  key: KEY,
-};
-const azureLanguageCredentials = {
-  endpoint: "https://ds2026-gusbaranj.cognitiveservices.azure.com/language/:analyze-conversations?api-version=2024-11-15-preview",
-  key: NLU_KEY,
-  deploymentName: "PhoneticsGameCategories",
-  projectName: "ProjectChooseSettings",
-};
-const settings: Settings = {
-  azureCredentials,
-  azureLanguageCredentials,
-  azureRegion: "swedencentral",
-  asrDefaultCompleteTimeout: 0,
-  asrDefaultNoInputTimeout: 5000,
-  locale: "en-US",
-  ttsDefaultVoice: "en-US-DavisNeural",
-};
-
-
-// == NLU helpers =======================================================================================================
-function getTopIntent(context: DMContext, threshold = 0.7): string | undefined {
-  const intents = context.interpretation?.intents;
-  console.log("INTENTS:", JSON.stringify(intents, null, 2), "threshold:", threshold);
-  if (!intents || intents.length === 0) return undefined;
-
-  const top = intents[0];
-  console.log("TOP INTENT USED:", top);
-  return top.confidenceScore >= threshold ? top.category : undefined;
-}
-
-function getEntity(context: DMContext, category: string): string | undefined {
-  const ent = context.interpretation?.entities.find(e => e.category === category);
-  if (!ent) return undefined;
-
-  const listKey = ent.extraInformation?.find(
-    (info: any) => info.extraInformationKind === "ListKey"
-  )?.key as string | undefined;
-
-  return listKey ?? ent.text;
-}
-
-function getEntityResolution(context: DMContext, category: string): any | undefined {
-  const ent = context.interpretation?.entities.find(e => e.category === category);
-  if (!ent) return undefined;
-
-  const resolution = ent.resolutions?.[0];
-  return resolution?.value;
-}
-
-
-// == GAME helpers ======================================================================================================
-function extractCategory(result: string): string | null {
-  const normalized = result.trim().toLowerCase();
-  // Categories
-  const categories = [
-    "animals and creatures",
-    "food and drink",
-    "geography and countries",
-    "nature and science",
-    "objects and items"
-  ];
-  const directMatch = categories.find(cat =>
-    normalized.includes(cat)
-  );
-  if (directMatch) return directMatch;
-  const synonymGroups: Record<string, string[]> = {
-    "animals and creatures": ["animals", "creatures", "animal", "creature"],
-    "food and drink": ["food", "drink", "foods", "drinks"],
-    "geography and countries": ["geography", "countries", "country"],
-    "nature and science": ["nature", "science"],
-    "objects and items": ["objects", "items", "object", "item"]
-  };
-  for (const [category, synonyms] of Object.entries(synonymGroups)) {
-    if (synonyms.some(s => normalized.includes(s))) {
-      return category;
-    }
-  }
-  // Random category
-  const randomKeywords = ["random", "any", "whatever", "surprise me", "anything"];
-  if (randomKeywords.some(k => normalized.includes(k))) {
-    const index = Math.floor(Math.random() * categories.length);
-    return categories[index];
-  }
-  return "";
-}
-
-function extractVowel(result: string): string | null {
-  const normalized = result.trim().toLowerCase();
-  if (/^[aeiou]$/.test(normalized)) return normalized;
-  const map: Record<string, string> = {
-    "8": "a",
-    "hey": "a",
-    "he": "e",
-    "ee": "e",
-    "eye": "i",
-    "hi": "i",
-    "oh": "o",
-    "you": "u",
-    "u": "u",
-  };
-  return map[normalized] ?? null;
-}
-
-function changeVowels(text: string, vowel: string = "i"): string {
-  return text.replace(/[aeiou]|(?<!\b)y/gi, (m) =>
-    m === m.toUpperCase() ? vowel.toUpperCase() : vowel
-  );
-}
-
-const GLOBAL_COMMANDS = ["exit", "restart", "reset", "default", "vowel", "mode", "category", ];
-const isGlobalCommand = ({ event }: { event: DMEvents }) =>
-  GLOBAL_COMMANDS.includes(
-    (event as any).value?.[0]?.utterance?.trim().toLowerCase()
-  );
-
-function buildConfirmationUtterance(context: any): string {
-  const parts: string[] = [];
-
-  if (context.targetGameMode) {
-    parts.push(`${context.targetGameMode} game mode`);
-  }
-  if (context.targetCategory) {
-    parts.push(`category ${context.targetCategory}`);
-  }
-  if (context.targetVowel) {
-    parts.push(`vowel ${context.targetVowel}`);
-  }
-  if (parts.length === 0) {
-    return "Please confirm your choices.";
-  }
-  return `Confirm ${parts.join(", ")}?`;
-}
-
-
-// == Machine ===========================================================================================================
+// == State Machine =====================================================================================================
 const dmMachine = setup({
   types: {
     context: {} as DMContext,
@@ -259,13 +121,13 @@ const dmMachine = setup({
               always: [
                 { target: "#Core.Done", guard: ({ context }) => context.lastCommand === "exit" },
                 { target: "#Boot.Greeting", guard: ({ context }) => context.lastCommand === "restart" },
-                { target: "#Boot.ResetSettings", guard: ({ context }) => context.lastCommand === "reset"},
-                { target: "#Boot.DefaultSettings", guard: ({ context }) => context.lastCommand === "default"},
-                { target: "#MainMenu.GetVowel", guard: ({ context }) => context.lastCommand === "vowel",
+                { target: "#Boot.ResetSettings", guard: ({ context }) => context.lastCommand === "reset settings"},
+                { target: "#Boot.DefaultSettings", guard: ({ context }) => context.lastCommand === "default settings"},
+                { target: "#MainMenu.GetVowel", guard: ({ context }) => context.lastCommand === "change vowel",
                   actions: assign({ targetVowel: "" }) },
-                { target: "#MainMenu.GetWordCategory", guard: ({ context }) => context.lastCommand === "category",
+                { target: "#MainMenu.GetWordCategory", guard: ({ context }) => context.lastCommand === "change category",
                   actions: assign({ targetCategory: "" }) },
-                { target: "#MainMenu.GetGameMode", guard: ({ context }) => context.lastCommand === "mode",
+                { target: "#MainMenu.GetGameMode", guard: ({ context }) => context.lastCommand === "change mode",
                   actions: assign({ targetGameMode: "" }) },
               ],
             },
@@ -720,8 +582,8 @@ const dmMachine = setup({
 });
 
 
-// == Actor setup =======================================================================================================
-const dmActor = createActor(dmMachine).start();
+// == Actor setup & export ==============================================================================================
+export const dmActor = createActor(dmMachine).start();
 
 dmActor.subscribe((state) => {
   console.group("State update");
@@ -729,17 +591,3 @@ dmActor.subscribe((state) => {
   console.log("Context:", state.context);
   console.groupEnd();
 });
-
-
-// == Button setup for starting the dialogue ============================================================================
-export function setupButton(element: HTMLButtonElement) {
-  element.addEventListener("click", () => {
-    dmActor.send({ type: "CLICK" });
-  });
-  dmActor.subscribe((snapshot) => {
-    const meta: { view?: string } = Object.values(
-      snapshot.context.spstRef.getSnapshot().getMeta(),
-    )[0] || { view: undefined };
-    element.innerHTML = `${meta.view}`;
-  });
-}

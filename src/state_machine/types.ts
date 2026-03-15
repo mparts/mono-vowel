@@ -1,10 +1,8 @@
-// == Imports ===========================================================================================================
 import type { Hypothesis, SpeechStateExternalEvent } from "speechstate";
 import type { ActorRef } from "xstate";
 
-
 // == NLU types =========================================================================================================
-export interface Entity {
+interface Entity {
   category: string;
   text: string;
   confidenceScore: number;
@@ -13,19 +11,18 @@ export interface Entity {
   extraInformation: Record<string, any>;
   resolutions: any[];
 }
-export interface Intent {
+interface Intent {
   category: string;
   confidenceScore: number;
 }
-export interface NLUObject {
+interface NLUObject {
   entities: Entity[];
   intents: Intent[];
   projectKind: string;
   topIntent: string;
 }
 
-
-// == Machine context ===================================================================================================
+// == Machine context and events exports ================================================================================
 export interface DMContext {
   spstRef: ActorRef<any, any>;
   lastResult: Hypothesis[] | null;
@@ -37,7 +34,5 @@ export interface DMContext {
   targetGameMode: string | null;
   lastCommand: string | null;
 }
-
-
-// == Machine events ====================================================================================================
 export type DMEvents = SpeechStateExternalEvent | { type: "CLICK" } | { type: "DONE" };
+
