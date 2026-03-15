@@ -1,8 +1,9 @@
+// == Imports ===========================================================================================================
 import type { Hypothesis, SpeechStateExternalEvent } from "speechstate";
 import type { ActorRef } from "xstate";
 
-// ── NLU types ─────────────────────────────────────────────────────────────────
 
+// == NLU types =========================================================================================================
 export interface Entity {
   category: string;
   text: string;
@@ -12,12 +13,10 @@ export interface Entity {
   extraInformation: Record<string, any>;
   resolutions: any[];
 }
-
 export interface Intent {
   category: string;
   confidenceScore: number;
 }
-
 export interface NLUObject {
   entities: Entity[];
   intents: Intent[];
@@ -25,19 +24,20 @@ export interface NLUObject {
   topIntent: string;
 }
 
-// ── Machine context ───────────────────────────────────────────────────────────
 
+// == Machine context ===================================================================================================
 export interface DMContext {
   spstRef: ActorRef<any, any>;
   lastResult: Hypothesis[] | null;
   interpretation: NLUObject | null;
   confirm: boolean;
+  current: string,
   targetVowel: string;
   targetCategory: string;
   targetGameMode: string | null;
   lastCommand: string | null;
 }
 
-// ── Machine events ────────────────────────────────────────────────────────────
 
+// == Machine events ====================================================================================================
 export type DMEvents = SpeechStateExternalEvent | { type: "CLICK" } | { type: "DONE" };
