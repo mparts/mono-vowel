@@ -1,4 +1,5 @@
 import type { DMContext, DMEvents } from "./types";
+import { toWords } from "number-to-words";
 
 // == NLU helpers =======================================================================================================
 export function getTopIntent(context: DMContext, threshold = 0.7): string | undefined {
@@ -14,27 +15,43 @@ export function getTopIntent(context: DMContext, threshold = 0.7): string | unde
 export function getEntity(context: DMContext, category: string): string | undefined {
   const ent = context.interpretation?.entities.find(e => e.category === category);
   if (!ent) return undefined;
-
   const listKey = ent.extraInformation?.find(
     (info: any) => info.extraInformationKind === "ListKey"
   )?.key as string | undefined;
-
   return listKey ?? ent.text;
 }
 
 export function getEntityResolution(context: DMContext, category: string): any | undefined {
   const ent = context.interpretation?.entities.find(e => e.category === category);
   if (!ent) return undefined;
-
-  const resolution = ent.resolutions?.[0];
-  return resolution?.value;
+  // 1. BooleanResolution
+  const resolution = ent.resolutions?.[0]?.value;
+  if (resolution !== undefined) {
+    return resolution;
+  }
+  // ListKey
+  const listKey = ent.extraInformation?.find(
+    (info: any) => info.extraInformationKind === "ListKey"
+  )?.key as string | undefined;
+  // Map string 'true' to actual boolean true
+  if (listKey !== undefined) {
+    const map: Record<string, boolean> = {
+      "true": true,
+      "false": false
+    };
+    if (listKey in map) {
+      return map[listKey];
+    }
+    return undefined;
+  }
+  return undefined;
 }
 
 
 // == GAME helpers ======================================================================================================
 export function extractCategory(result: string): string | null {
   const normalized = result.trim().toLowerCase();
-  // Categories
+  // Exact Categories match
   const categories = [
     "animals and creatures",
     "food and drink",
@@ -42,10 +59,9 @@ export function extractCategory(result: string): string | null {
     "nature and science",
     "objects and items"
   ];
-  const directMatch = categories.find(cat =>
-    normalized.includes(cat)
-  );
+  const directMatch = categories.find(cat => normalized.includes(cat));
   if (directMatch) return directMatch;
+  // Synonym categories match      
   const synonymGroups: Record<string, string[]> = {
     "animals and creatures": ["animals", "creatures", "animal", "creature"],
     "food and drink": ["food", "drink", "foods", "drinks"],
@@ -69,9 +85,12 @@ export function extractCategory(result: string): string | null {
 
 export function extractVowel(result: string): string | null {
   const normalized = result.trim().toLowerCase();
+  // 1. Direct single-letter vowel
   if (/^[aeiou]$/.test(normalized)) return normalized;
-  const map: Record<string, string> = {
+  // 2. Exact match map
+  const exactMap: Record<string, string> = {
     "8": "a",
+    "ey": "a",
     "hey": "a",
     "he": "e",
     "ee": "e",
@@ -81,18 +100,36 @@ export function extractVowel(result: string): string | null {
     "you": "u",
     "u": "u",
   };
-  return map[normalized] ?? null;
+  if (exactMap[normalized]) {
+    return exactMap[normalized];
+  }
+  // Vowel "i" specific, "replacement" of NLU
+  const synonymGroups: Record<string, string[]> = {
+    "i": ["vowel i", "is i", "choose i", "vowel eye", "is eye", "choose eye"],
+  };
+  for (const [vowel, synonyms] of Object.entries(synonymGroups)) {
+    if (synonyms.some(s => normalized.includes(s))) {
+      return vowel;
+    }
+  }
+  return null;
 }
 
 export function changeVowels(text: string, vowel: string = "i"): string {
-  return text.replace(/[aeiou]|(?<!\b)y/gi, (m) =>
+  const expanded = text.replace(/\d+(\.\d+)?/g, (match) => {
+    if (match.includes(".")) {
+      const [integer, decimal] = match.split(".");
+      return `${toWords(parseInt(integer))} point ${[...decimal].map(d => toWords(parseInt(d))).join(" ")}`;
+    }
+    return toWords(parseInt(match));
+  });
+  return expanded.replace(/[aeiou]|(?<!\b)y/gi, (m) =>
     m === m.toUpperCase() ? vowel.toUpperCase() : vowel
   );
 }
 
-
 // == General helpers ===================================================================================================
-const GLOBAL_COMMANDS = ["exit", "restart", "reset settings", "default settings", "change vowel", "change mode", "change category", ];
+const GLOBAL_COMMANDS = ["exit", "restart", "reset", "default", "change vowel", "change mode", "change category", ];
 export const isGlobalCommand = ({ event }: { event: DMEvents }) =>
   GLOBAL_COMMANDS.includes(
     (event as any).value?.[0]?.utterance?.trim().toLowerCase()

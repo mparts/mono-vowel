@@ -3,7 +3,7 @@ import { speechstate } from "speechstate";
 import type { DMContext, DMEvents } from "./types";
 import { settings } from "../azure/azure_credentials";
 import { getTopIntent, getEntity, getEntityResolution } from "./helpers"; // NLU helpers
-import {extractCategory, extractVowel, changeVowels} from "./helpers"; // Game helpers
+import {extractCategory, extractVowel, changeVowels, } from "./helpers"; // Game helpers
 import {isGlobalCommand, buildConfirmationUtterance} from "./helpers"; // General helpers
 
 // == State Machine =====================================================================================================
@@ -121,8 +121,8 @@ const dmMachine = setup({
               always: [
                 { target: "#Core.Done", guard: ({ context }) => context.lastCommand === "exit" },
                 { target: "#Boot.Greeting", guard: ({ context }) => context.lastCommand === "restart" },
-                { target: "#Boot.ResetSettings", guard: ({ context }) => context.lastCommand === "reset settings"},
-                { target: "#Boot.DefaultSettings", guard: ({ context }) => context.lastCommand === "default settings"},
+                { target: "#Boot.ResetSettings", guard: ({ context }) => context.lastCommand === "reset"},
+                { target: "#Boot.DefaultSettings", guard: ({ context }) => context.lastCommand === "default"},
                 { target: "#MainMenu.GetVowel", guard: ({ context }) => context.lastCommand === "change vowel",
                   actions: assign({ targetVowel: "" }) },
                 { target: "#MainMenu.GetWordCategory", guard: ({ context }) => context.lastCommand === "change category",
@@ -208,10 +208,14 @@ const dmMachine = setup({
             ExtractEverything: {
               entry: assign(({ context }) => {
                 // get vowel
-                const Vowel = getEntity(context, "VowelChoice");
+                const vowelfromEntity = getEntity(context, "VowelChoice");
+                const vowelfromUtterance = extractVowel(context.lastResult?.[0]?.utterance ?? "");
+                const vowel = vowelfromEntity ?? vowelfromUtterance;
                 // get category
-                const entity = getEntity(context, "WordCategory");
-                const category = entity ? extractCategory(entity) : null;
+                const rawcategory = getEntity(context, "WordCategory");
+                const categoryfromEntity = rawcategory? extractCategory(rawcategory) : null;
+                const categoryfromUtterance = extractCategory(context.lastResult?.[0]?.utterance ?? "")
+                const category = categoryfromEntity ?? categoryfromUtterance;
                 // get game mode
                 const mode = getTopIntent(context);
                 const modeMap: Record<string, string> = {
@@ -220,7 +224,7 @@ const dmMachine = setup({
                   ChooseSinglePlayer: "Singleplayer"
                 };
                 return {
-                  targetVowel: Vowel ?? context.targetVowel,
+                  targetVowel: vowel ?? context.targetVowel,
                   targetCategory: category ?? context.targetCategory,
                   targetGameMode:  mode ? modeMap[mode] ?? context.targetGameMode : "",
                 };
