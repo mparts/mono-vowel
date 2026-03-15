@@ -1,12 +1,9 @@
 // == Imports ===========================================================================================================
-import { assign, createActor, setup, transition } from "xstate";
+import { assign, createActor, setup } from "xstate";
 import type { Settings } from "speechstate";
 import { speechstate } from "speechstate";
-import { createBrowserInspector } from "@statelyai/inspect";
 import { KEY, NLU_KEY } from "./azure";
 import type { DMContext, DMEvents } from "./types";
-
-const inspector = createBrowserInspector();
 
 // == Azure Related Credentials =========================================================================================
 const azureCredentials = {
@@ -614,9 +611,7 @@ const dmMachine = setup({
 });
 
 // == Actor setup =======================================================================================================
-const dmActor = createActor(dmMachine, {
-  inspect: inspector.inspect,
-}).start();
+const dmActor = createActor(dmMachine).start();
 
 dmActor.subscribe((state) => {
   console.group("State update");
