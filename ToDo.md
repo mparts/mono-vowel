@@ -7,7 +7,9 @@
 
 # features
 
-- Add preset functionality => jump straight to game
+- randomize confirm and get utterances
+- divide natur-science categories
+- Prevent numbers, ask for user utterance repeat. OR add number functionality!!
 - functionality to grab everything in one utterance
 - more global commands
 - better feadback to user

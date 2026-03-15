@@ -10,6 +10,7 @@ export interface Entity {
   offset: number;
   length: number;
   extraInformation: Record<string, any>;
+  resolutions: any[];
 }
 
 export interface Intent {
