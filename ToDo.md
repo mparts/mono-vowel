@@ -18,7 +18,6 @@
 - complete singleplayer
 - complete multiplayer
 
-## KNOWN BUGS
+# extra
 
-- Pronoun "I" cannot be skipped, always grabbed as a vowel. SOLUTION: Removed from NLU, can only be grabbed on its own by regex
-- Numbers in utterance prevent the vowel change.
+- swedish vowels, danish vowels

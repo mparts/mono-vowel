@@ -47,7 +47,6 @@ export function getEntityResolution(context: DMContext, category: string): any |
   return undefined;
 }
 
-
 // == GAME helpers ======================================================================================================
 export function extractCategory(result: string): string | null {
   const normalized = result.trim().toLowerCase();

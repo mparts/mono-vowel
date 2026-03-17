@@ -15,43 +15,26 @@ const dmMachine = setup({
   actions: {
     "spst.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
       context.spstRef.send({ type: "SPEAK",value: { utterance: params.utterance }});},
-    "spst.listen": ({ context }) =>
-      context.spstRef.send({ type: "LISTEN", value: { nlu: true }}),
-    "storeCommand": assign(({ event }) => ({
-      lastCommand: (event as any).value?.[0]?.utterance?.trim().toLowerCase(), lastResult: null, interpretation: null,})),
+    "spst.listen": ({ context }) => context.spstRef.send({ type: "LISTEN", value: { nlu: true }}),
+    "storeCommand": assign(({ event }) => ({ lastCommand: (event as any).value?.[0]?.utterance?.trim().toLowerCase(), lastResult: null, interpretation: null,})),
     "clearCache": assign({ lastResult: null, interpretation: null }),
     "clearContext": assign({
-      lastResult: null,
-      interpretation: null,
-      confirm: false,
-      current: "",
-      targetVowel: "",
-      targetCategory: "",
-      targetGameMode: "",
-      lastCommand: null as string | null,
+      confirm: false, lastResult: null, interpretation: null,
+      temp: "", targetVowel: "", targetCategory: "", targetGameMode: "",
     }),
     "defaultContext": assign({
-      lastResult: null,
-      interpretation: null,
-      confirm: false,
-      current: "",
-      targetVowel: "o",
-      targetCategory: "animals and creatures",
-      targetGameMode: "Echo",
-      lastCommand: null as string | null,
+      confirm: false, lastResult: null, interpretation: null,
+      temp: "", targetVowel: "o", targetCategory: "animals and creatures", targetGameMode: "Echo",
     }),
   },
 }).createMachine({
   context: ({ spawn }) => ({
-    spstRef: spawn(speechstate, { input: settings }),
-    lastResult: null,
-    interpretation: null,
+    targetGameMode: "", targetVowel: "", targetCategory: "",
+    temp: "", target: "",
+    currentListener: "",
     confirm: false,
-    current: "",
-    targetVowel: "",
-    targetCategory: "",
-    targetGameMode: "",
-    lastCommand: null as string | null,
+    lastCommand: null as string | null, lastResult: null, interpretation: null,
+    spstRef: spawn(speechstate, { input: settings }),
   }),
   id: "DM",
   initial: "Core",
@@ -63,14 +46,9 @@ const dmMachine = setup({
       states: {
         // == Boot ======================================================================================================
         Boot: {
-          entry: [assign({ current: "Boot" })],
           id: "Boot",
           initial: "Prepare",
           states: {
-            hist: {
-              type: 'history',
-              history: 'deep',
-            },
             Prepare: {
               entry: ({ context }) => context.spstRef.send({ type: "PREPARE" }),
               on: { ASRTTS_READY: "WaitToStart" },
@@ -80,28 +58,7 @@ const dmMachine = setup({
             },
             Greeting: {
               entry: {type: "spst.speak", params: { utterance: "Hey!" },},
-              on: { SPEAK_COMPLETE: "GetSettings" },
-            },
-            GetSettings: {
-              entry: {type: "spst.speak", params: { utterance: "Use default settings?" },},
-              on: { SPEAK_COMPLETE: {target: "ConfirmPlanner", actions: assign({ confirm: true })} },
-            },
-            ConfirmPlanner: {
-              always: [
-                { target: "#Listener", guard: ({ context }) => context.confirm === true, actions: assign({confirm: false})},
-                { target: "#Game", guard: ({ context }) => getEntityResolution(context, "YesNo") === true, actions: {type: "defaultContext"}},
-                { target: "#MainMenu", guard: ({ context }) => getEntityResolution(context, "YesNo") === false, actions: {type: "clearContext"} },
-                { target: "GetSettings", guard: ({ context }) => !getEntityResolution(context, "YesNo"), 
-                actions: {type: "spst.speak", params: { utterance: "Please answer yes or no." }}},
-              ],
-            },
-            DefaultSettings: {
-              entry: [{type: "defaultContext"}, { type: "spst.speak", params: { utterance: "Default settings applied." } }],
-              on: { SPEAK_COMPLETE: "#Game"}
-            },
-            ResetSettings: {
-              entry: [{type: "clearContext"}, { type: "spst.speak", params: { utterance: "Settings reset." } }],
-              on: { SPEAK_COMPLETE: "#MainMenu" }
+              on: { SPEAK_COMPLETE: "#Game" },
             },
           },
         },
@@ -110,7 +67,7 @@ const dmMachine = setup({
           entry: [ {type: "clearContext"}, { type: "spst.speak", params: { utterance: "Thanks for playing!!!" } }],
           on: { CLICK: "#Boot.Greeting" },
         },
-        // == Global Command Handler ====================================================================================
+        // == Redirects global commands =================================================================================
         HandleCommand: {
           initial: "WaitReady",
           states: {
@@ -121,8 +78,8 @@ const dmMachine = setup({
               always: [
                 { target: "#Core.Done", guard: ({ context }) => context.lastCommand === "exit" },
                 { target: "#Boot.Greeting", guard: ({ context }) => context.lastCommand === "restart" },
-                { target: "#Boot.ResetSettings", guard: ({ context }) => context.lastCommand === "reset"},
-                { target: "#Boot.DefaultSettings", guard: ({ context }) => context.lastCommand === "default"},
+                { target: "ResetSettings", guard: ({ context }) => context.lastCommand === "reset"},
+                { target: "DefaultSettings", guard: ({ context }) => context.lastCommand === "default"},
                 { target: "#MainMenu.GetVowel", guard: ({ context }) => context.lastCommand === "change vowel",
                   actions: assign({ targetVowel: "" }) },
                 { target: "#MainMenu.GetWordCategory", guard: ({ context }) => context.lastCommand === "change category",
@@ -131,9 +88,17 @@ const dmMachine = setup({
                   actions: assign({ targetGameMode: "" }) },
               ],
             },
+            DefaultSettings: {
+              entry: [{type: "defaultContext"}, { type: "spst.speak", params: { utterance: "Default settings applied." } }],
+              on: { SPEAK_COMPLETE: "#Game"}
+            },
+            ResetSettings: {
+              entry: [{type: "clearContext"}, { type: "spst.speak", params: { utterance: "Settings reset." } }],
+              on: { SPEAK_COMPLETE: "#Game" }
+            },
           },
         },
-        // == Listener ======================================================================================================
+        // == Listener ==================================================================================================
         Listener: {
           id: "Listener",
           initial: "Listen",
@@ -149,27 +114,88 @@ const dmMachine = setup({
               entry: { type: "spst.listen" },
               on: {
                 RECOGNISED: [
-                  { guard: isGlobalCommand,
-                    target: "#Core.HandleCommand",
-                    actions: { type: "storeCommand" },
-                  },
-                  {
-                    actions: assign(({ event }) => ({
-                      lastResult: event.value,
-                      interpretation: event.nluValue,
-                    })),
-                  },
+                  { target: "#Core.HandleCommand", guard: isGlobalCommand, actions: { type: "storeCommand" },},
+                  { actions: assign(({ event }) => ({ lastResult: event.value, interpretation: event.nluValue})),},
                 ],
                 ASR_NOINPUT: {
-                  actions: { type: "clearCache" },
-                  target: "WaitReadyNoInput",
+                  actions: { type: "clearCache" }, target: "WaitReadyNoInput",
                 },
                 LISTEN_COMPLETE: [
-                  { target: "#Boot.hist", guard: ({ context }) => context.current === "Boot" && !!context.lastResult},
-                  { target: "#MainMenu.hist", guard: ({ context }) => context.current === "MainMenu" && !!context.lastResult},
-                  { target: "#Game.hist", guard: ({ context }) => context.current === "Game" && !!context.lastResult},
+                  { target: "#Game.hist", guard: ({ context }) => context.currentListener === "Game" && !!context.lastResult},
+                  { target: "#Getter.hist", guard: ({ context }) => context.currentListener=== "Getter" && !!context.lastResult},
                 ],
               },
+            },
+          },
+        },
+        // == Helps with getting stuff from user utterancies ============================================================
+        Getter: {
+          entry: assign({ currentListener: "Getter" }),
+          id: "Getter",
+          initial: "CheckExistence",
+          states: {
+            hist: { type: 'history', history: 'deep'},
+            CheckExistence: {
+              always: [
+                { target: "ConfirmPromptInit", guard: ({ context }) => !!context.temp && context.target === "Init", actions: assign({ confirm: true })},
+                { target: "ConfirmPrompt", guard: ({ context }) => !!context.temp, actions: assign({ confirm: true })},
+                { target: "PromptInit", guard: ({ context }) => context.target === "Init"},
+                { target: "Prompt" },
+              ],
+            },
+            Prompt: {
+              entry: { type: "spst.speak", params: ({ context }) => ({ utterance: `Please choose a ${context.target}.` })},
+              on: { SPEAK_COMPLETE: "Planner" },
+            },
+            PromptInit: {
+              entry: { type: "spst.speak", params: { utterance: "What would you like to play?" },},
+              on: { SPEAK_COMPLETE: "Planner" },
+            },
+            Planner: {
+              always: [
+                { target: "#Listener", guard: ({ context }) => !context.lastResult },
+                { target: "CheckCompatibility", guard: ({ context }) => !!context.lastResult },
+              ],
+            },
+            CheckCompatibility: {
+              always: [
+                { target: "#Initialize.ExtractEverything", guard: ({ context }) => context.target === "Init",},
+                { target: "#GetGameMode.CheckCompatibility", guard: ({ context }) => context.target === "game mode"},
+                { target: "#GetVowel.CheckCompatibility", guard: ({ context }) => context.target === "vowel"},
+                { target: "#GetWordCategory.CheckCompatibility", guard: ({ context }) => context.target === "word category",},
+              ]
+            },
+            Retry: {
+              entry: assign({ temp: "" }),
+              always: [
+                {target: "CheckExistence", actions: {type: "clearContext"}, guard: ({ context }) => context.target === "Init",},        
+                {target: "CheckExistence", actions: assign({ targetGameMode: "" }), guard: ({ context }) => context.target === "game mode",},                
+                {target: "CheckExistence", actions: assign({ targetVowel: "" }), guard: ({ context }) => context.target === "vowel",},
+                {target: "CheckExistence", actions: assign({ targetCategory: "" }), guard: ({ context }) => context.target === "word category",},
+              ]
+            },
+            ConfirmPrompt: {
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: `Confirm choosing ${context.temp} as the ${context.target}?`})},
+              on: { SPEAK_COMPLETE: "ConfirmPlanner" },
+            },
+            ConfirmPromptInit: {
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: buildConfirmationUtterance(context)})},
+              on: { SPEAK_COMPLETE: {target: "ConfirmPlanner", actions: assign({confirm: true})} },
+            },
+            ConfirmPlanner: {
+              always: [
+                { target: "#Listener", guard: ({ context }) => context.confirm === true, actions: assign({confirm: false})},
+                { target: "#Game.hist", guard: ({ context }) => getEntityResolution(context, "YesNo") === true, 
+                actions: [assign({ temp: "" }), {type: "clearCache"}] },
+                { target: "Retry", guard: ({ context }) => getEntityResolution(context, "YesNo") === false,
+                actions: {type: "clearCache"} },
+                { target: "ConfirmPrompt", guard: ({ context }) => !getEntityResolution(context, "YesNo"),
+                  actions: [{type: "spst.speak", params: { utterance: "Please answer yes or no." } }, assign({confirm: true}) ]},
+              ],
+            },
+            FallbackError: {
+              entry: { type: "spst.speak", params: { utterance: "Sorry, I'm not sure how to help with that." }},
+              on: { SPEAK_COMPLETE: {target: "Planner", actions: {type: "clearCache"}}},
             },
           },
         },
@@ -177,36 +203,29 @@ const dmMachine = setup({
     },
     // == Main Menu =====================================================================================================
     MainMenu: {
-      entry: [assign({ current: "MainMenu" })],
       id: "MainMenu",
       initial: "Initialize",
       states: {
-        hist: {
-          type: 'history',
-          history: 'deep',
-        },
+        hist: { type: 'history', history: 'deep'},
         Initialize: {
-          initial: "Prompt",
+          id: "Initialize",
+          entry: assign({ target: "Init" }),
+          initial: "Planner",
           states: {
-            Prompt: {
-              entry: { type: "spst.speak", params: { utterance: "What would you like to play?" },},
-              on: { SPEAK_COMPLETE: "Planner" },
-            },
-            ConfirmPrompt: {
-              entry: {
-                type: "spst.speak",
-                params: ({ context }) => ({utterance: buildConfirmationUtterance(context)}),
-              },
-              on: { SPEAK_COMPLETE: {target: "ConfirmPlanner", actions: assign({confirm: true})} },
-            },
             Planner: {
               always: [
-                { target: "#Listener", guard: ({ context }) => !context.lastResult },
-                { target: "ExtractEverything", guard: ({ context }) => !!context.lastResult },
-              ],
+                {target: "#Getter", guard: ({ context }) => !context.targetGameMode, actions: assign({temp: ""})},
+                {target: "#Getter.CheckExistence", actions: assign({temp: ({ context }) => context.temp + context.targetGameMode})}
+              ]
             },
             ExtractEverything: {
               entry: assign(({ context }) => {
+                // get game mode
+                const mode = getTopIntent(context);
+                const modeMap: Record<string, string> = {
+                  ChooseRepeatGame: "Echo",
+                  ChooseMultiplayer: "Multiplayer",
+                  ChooseSinglePlayer: "Singleplayer"};
                 // get vowel
                 const vowelfromEntity = getEntity(context, "VowelChoice");
                 const vowelfromUtterance = extractVowel(context.lastResult?.[0]?.utterance ?? "");
@@ -216,67 +235,30 @@ const dmMachine = setup({
                 const categoryfromEntity = rawcategory? extractCategory(rawcategory) : null;
                 const categoryfromUtterance = extractCategory(context.lastResult?.[0]?.utterance ?? "")
                 const category = categoryfromEntity ?? categoryfromUtterance;
-                // get game mode
-                const mode = getTopIntent(context);
-                const modeMap: Record<string, string> = {
-                  ChooseRepeatGame: "Echo",
-                  ChooseMultiplayer: "Multiplayer",
-                  ChooseSinglePlayer: "Singleplayer"
-                };
                 return {
+                  targetGameMode:  mode ? modeMap[mode] ?? context.targetGameMode : "",
                   targetVowel: vowel ?? context.targetVowel,
                   targetCategory: category ?? context.targetCategory,
-                  targetGameMode:  mode ? modeMap[mode] ?? context.targetGameMode : "",
                 };
-              }),
+              },),
               always: [
-                { target: "ConfirmPrompt", guard: ({ context }) => !!context.targetGameMode, actions: { type: "clearCache" } },
-                { target: "FallbackError" }
+                { target: "Planner", guard: ({ context }) => !!context.targetGameMode, actions: { type: "clearCache" } },
+                { target: "#Getter.FallbackError" }
               ]
-            },
-            ConfirmPlanner: {
-              always: [
-                { target: "#Listener", guard: ({ context }) => context.confirm === true, actions: assign({confirm: false})},
-                { target: "#Game", guard: ({ context }) => getEntityResolution(context, "YesNo") === true, actions: {type: "clearCache"} },
-                { target: "#MainMenu.GetGameMode", guard: ({ context }) => getEntityResolution(context, "YesNo") === false, actions: {type: "clearContext"}},
-                { target: "ConfirmPrompt", guard: ({ context }) => !getEntityResolution(context, "YesNo"),
-                  actions: [{type: "spst.speak", params: { utterance: "Please answer yes or no." } }, assign({confirm: true}) ]},
-              ],
-            },
-            FallbackError: {
-              entry: { type: "spst.speak", params: { utterance: "Sorry, I'm not sure how to help with that." }},
-              on: { SPEAK_COMPLETE: {target: "#MainMenu.GetGameMode", actions: {type: "clearContext"}}},
             },
           },
         },
         // == Get Game Mode =============================================================================================
         GetGameMode: {
-          initial: "CheckExistence",
+          id: "GetGameMode",
+          entry: assign({ target: "game mode" }),
+          initial: "Planner",
           states: {
-            CheckExistence: {
-              always: [
-                {
-                  target: "ConfirmPrompt", guard: ({ context }) => !!context.targetGameMode, actions: assign({ confirm: true }),
-                },
-                { target: "Prompt" },
-              ],
-            },
-            Prompt: {
-              entry: { type: "spst.speak", params: { utterance: "Please choose a game mode." },},
-              on: { SPEAK_COMPLETE: "Planner" },
-            },
-            ConfirmPrompt: {
-              entry: {
-                type: "spst.speak",
-                params: ({ context }) => ({utterance: `Confirm ${context.targetGameMode} game mode?`}),
-              },
-              on: { SPEAK_COMPLETE: "ConfirmPlanner" },
-            },
             Planner: {
               always: [
-                { target: "#Listener", guard: ({ context }) => !context.lastResult },
-                { target: "CheckCompatibility", guard: ({ context }) => !!context.lastResult },
-              ],
+                {target: "#Getter", guard: ({ context }) => !context.targetGameMode, actions: assign({temp: ""})},
+                {target: "#Getter.CheckExistence", actions: assign({temp: ({ context }) => context.temp + context.targetGameMode,})}
+              ]
             },
             CheckCompatibility: {
               entry: assign(({ context }) => {
@@ -291,163 +273,73 @@ const dmMachine = setup({
                 };
               }),
               always: [
-                { target: "CheckExistence", guard: ({ context }) => !!context.targetGameMode, actions: { type: "clearCache" } },
-                { target: "FallbackError" }
+                { target: "Planner", guard: ({ context }) => !!context.targetGameMode, actions: { type: "clearCache" },},
+                { target: "#Getter.FallbackError" }
               ]
-            },
-            ConfirmPlanner: {
-              always: [
-                { target: "#Listener", guard: ({ context }) => context.confirm === true, actions: assign({confirm: false})},
-                { target: "#Game", guard: ({ context }) => getEntityResolution(context, "YesNo") === true, actions: {type: "clearCache"} },
-                { target: "CheckExistence", guard: ({ context }) => getEntityResolution(context, "YesNo") === false,
-                actions: [assign({ targetGameMode: "" }), {type: "clearCache"}] },
-                { target: "ConfirmPrompt", guard: ({ context }) => !getEntityResolution(context, "YesNo"),
-                  actions: [{type: "spst.speak", params: { utterance: "Please answer yes or no." } }, assign({confirm: true}) ]},
-              ],
-            },
-            FallbackError: {
-              entry: { type: "spst.speak", params: { utterance: "Sorry, I'm not sure how to help with that." }},
-              on: { SPEAK_COMPLETE: {target: "Planner", actions: {type: "clearCache"}}},
             },
           },
         },
         // == Get Vowel =================================================================================================
         GetVowel: {
-          initial: "CheckExistence",
+          id: "GetVowel",
+          entry: assign({ target: "vowel" }),
+          initial: "Planner",
           states: {
-            CheckExistence: {
-              always: [
-                {
-                  target: "ConfirmPrompt", guard: ({ context }) => !!context.targetVowel, actions: assign({ confirm: true }),
-                },
-                { target: "Prompt" },
-              ],
-            },
-            Prompt: {
-              entry: {
-                type: "spst.speak", params: { utterance: "Please choose a vowel." },
-              },
-              on: { SPEAK_COMPLETE: "Planner" },
-            },
-            ConfirmPrompt: {
-              entry: {
-                type: "spst.speak",
-                params: ({ context }) => ({utterance: `Confirm the vowel ${context.targetVowel}?`}),
-              },
-              on: { SPEAK_COMPLETE: "ConfirmPlanner"},
-            },
             Planner: {
               always: [
-                { target: "#Listener", guard: ({ context }) => !context.lastResult },
-                { target: "CheckCompatibility", guard: ({ context }) => !!context.lastResult },
-              ],
+                {target: "#Getter", guard: ({ context }) => !context.targetVowel, actions: assign({temp: ""})},
+                {target: "#Getter.CheckExistence", actions: assign({temp: ({ context }) => context.temp + context.targetVowel,})}
+              ]
             },            
             CheckCompatibility: {
               always: [
-                {
-                  target: "CheckExistence",
+                // Try hardcoded
+                {target: "Planner", actions: {type: "clearCache"},
                   guard: ({ context }) => {
                   const utterance = context.lastResult?.[0]?.utterance ?? "";
                   const vowel = extractVowel(utterance);
                   if (vowel) context.targetVowel = vowel;
-                  return !!vowel;},
-                  actions: {type: "clearCache"}
-                },
-                {
-                  target: "CheckExistence",
-                  guard: ({ context }) => !!getEntity(context, "VowelChoice"),
-                  actions: [assign(({ context }) => ({
-                    targetVowel: getEntity(context, "VowelChoice")!,
-                  })), 
-                  {type: "clearCache"}]
-                },
-                { target: "FallbackError" },
+                  return !!vowel;},},
+                // If no hardcoded, try NLU
+                {target: "Planner", guard: ({ context }) => !!getEntity(context, "VowelChoice"),
+                actions: [assign(({ context }) => ({ targetVowel: getEntity(context, "VowelChoice")!,})), {type: "clearCache"}]},
+                // If no NLU fallback and retry
+                { target: "#Getter.FallbackError" },
               ],
-            },
-            ConfirmPlanner: {
-              always: [
-                { target: "#Listener", guard: ({ context }) => context.confirm === true, actions: assign({confirm: false})},
-                { target: "#Game.hist", guard: ({ context }) => getEntityResolution(context, "YesNo") === true, actions: {type: "clearCache"} },
-                { target: "CheckExistence", guard: ({ context }) => getEntityResolution(context, "YesNo") === false,
-                actions: [assign({ targetVowel: "" }), {type: "clearCache"}] },
-                { target: "ConfirmPrompt", guard: ({ context }) => !getEntityResolution(context, "YesNo"),
-                  actions: [{type: "spst.speak", params: { utterance: "Please answer yes or no." } }, assign({confirm: true}) ]},
-              ],
-            },
-            FallbackError: {
-              entry:{ type: "spst.speak", params:{ utterance: `Sorry, I didn't understand. Try saying a vowel.`} },
-              on: { SPEAK_COMPLETE: {target: "Planner", actions: {type: "clearCache"}}},
             },
           },
         },
         // == Get Word Category =========================================================================================
         GetWordCategory: {
-          initial: "CheckExistence",
+          id: "GetWordCategory",
+          entry: assign({ target: "word category" }),
+          initial: "Planner",
           states: {
-            CheckExistence: {
-              always: [
-                {
-                  target: "ConfirmPrompt", guard: ({ context }) => !!context.targetCategory, actions: assign({ confirm: true }),
-                },
-                { target: "Prompt" },
-              ],
-            },
-            Prompt: {
-              entry: {
-                type: "spst.speak",
-                params: { utterance: "Please choose a word category." },
-              },
-              on: { SPEAK_COMPLETE: "Planner" },
-            },
-            ConfirmPrompt: {
-              entry: {
-                type: "spst.speak",
-                params: ({ context }) => ({utterance: `Confirm the category ${context.targetCategory}?`}),
-              },
-              on: { SPEAK_COMPLETE: "ConfirmPlanner"},
-            },
             Planner: {
               always: [
-                { target: "#Listener", guard: ({ context }) => !context.lastResult },
-                { target: "CheckCompatibility", guard: ({ context }) => !!context.lastResult },
-              ],
+                {target: "#Getter", guard: ({ context }) => !context.targetCategory, actions: assign({temp: ""})},
+                {target: "#Getter.CheckExistence", actions: assign({temp: ({ context }) => context.temp + context.targetCategory,})}
+              ]
             },
             CheckCompatibility: {
               always: [
-                {
-                  target: "CheckExistence",
+                // Try hardcoded
+                {target: "Planner", actions: { type: "clearCache" },
                   guard: ({ context }) => {
                     const utterance = context.lastResult?.[0]?.utterance ?? "";
                     const category = extractCategory(utterance);
                     if (category) context.targetCategory = category;
-                    return !!category;
-                  }, actions: { type: "clearCache" }
-                },
-                {
-                  target: "CheckExistence",
+                    return !!category;},},
+                // If no hardcoded, try NLU
+                {target: "Planner", actions: { type: "clearCache" },
                   guard: ({ context }) => {
                     const entity = getEntity(context, "WordCategory");
                     const category = entity ? extractCategory(entity) : null;
                     if (category) context.targetCategory = category;
-                    return !!category;
-                  }, actions: { type: "clearCache" }
-                },
-                { target: "FallbackError" }
+                    return !!category;},},
+                // If no NLU fallback and retry
+                { target: "#Getter.FallbackError" }
               ]
-            },
-            ConfirmPlanner: {
-              always: [
-                { target: "#Listener", guard: ({ context }) => context.confirm === true, actions: assign({confirm: false})},
-                { target: "#Game.hist", guard: ({ context }) => getEntityResolution(context, "YesNo") === true, actions: {type: "clearCache"} },
-                { target: "CheckExistence", guard: ({ context }) => getEntityResolution(context, "YesNo") === false,
-                actions: [assign({ targetCategory: "" }), {type: "clearCache"}] },
-                { target: "ConfirmPrompt", guard: ({ context }) => getEntityResolution(context, "YesNo") !== true && getEntityResolution(context, "YesNo") !== false,
-                  actions: [{type: "spst.speak", params: { utterance: "Please answer yes or no." } }, assign({confirm: true}) ]},
-              ],
-            },
-            FallbackError: {
-              entry: { type: "spst.speak", params: { utterance: `Sorry, I don't know this word category. Please try again.`, } },
-              on: { SPEAK_COMPLETE: {target: "Planner", actions: {type: "clearCache"}}},
             },
           },
         },
@@ -455,20 +347,17 @@ const dmMachine = setup({
     },
     // == Games =========================================================================================================
     Game: {
-      entry: [assign({ current: "Game" })],
+      entry: assign({ currentListener: "Game" }),
       id: "Game",
       initial: "modePicker",
       states: {
-        hist: {
-              type: 'history',
-              history: 'deep',
-            },
+        hist: { type: 'history', history: 'deep'},
         modePicker: {
           always: [
             { target: "EchoMode", guard: ({ context }) => context.targetGameMode === "Echo",},
             { target: "Multiplayer", guard: ({ context }) => context.targetGameMode === "Multiplayer", },
             { target: "Singleplayer", guard: ({ context }) => context.targetGameMode === "Singleplayer",},
-            { target: "#MainMenu.GetGameMode" },
+            { target: "#MainMenu" },
           ],
         },
         // == Echo Mode =================================================================================================
@@ -478,18 +367,12 @@ const dmMachine = setup({
           states: {
             Setup: {
               always: [
-                { target: "#MainMenu.GetVowel", guard: ({ context }) => context.targetVowel === "", },
-                { target: "#MainMenu.GetWordCategory", guard: ({ context }) => context.targetCategory === "", },
-                { target: "Prompt", },
+                { target: "#MainMenu.GetVowel", guard: ({ context }) => context.targetVowel === ""},
+                { target: "Prompt"},
               ],
             },
             Prompt: {
-              entry: {
-                type: "spst.speak",
-                params: ({ context }) => ({
-                  utterance: `Say a sentence and I will change all vowels to ${context.targetVowel}.`,
-                }),
-              },
+              entry: { type: "spst.speak", params: ({ context }) => ({ utterance: `Say a sentence and I will change all vowels to ${context.targetVowel}.`}),},
               on: { SPEAK_COMPLETE: "Planner" },
             },
             Planner: {
@@ -499,12 +382,7 @@ const dmMachine = setup({
               ],
             },                                    
             Transform: {
-              entry: {
-                type: "spst.speak",
-                params: ({ context }) => ({
-                  utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel),
-                }),
-              },
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
               on: { SPEAK_COMPLETE: {target: "Planner", actions: { type: "clearCache" } } }
             },
           },
@@ -512,69 +390,6 @@ const dmMachine = setup({
         // == Multiplayer Mode ==========================================================================================
         Multiplayer: {
           id: "Multiplayer",
-          initial: "Setup",
-          states: {
-            Setup: {
-              always: [
-                { target: "#MainMenu.GetVowel", guard: ({ context }) => context.targetVowel === "", },
-                { target: "Prompt", },
-              ],
-            },
-            Prompt: {
-              entry: {
-                type: "spst.speak",
-                params: ({ context }) => ({
-                  utterance: `Say a sentence and I will change all vowels to ${context.targetVowel}.`,
-                }),
-              },
-              on: { SPEAK_COMPLETE: "Listen" },
-            },
-            WaitReadyNoInput: {
-              on: { ASRTTS_READY: "NoInput", SPEAK_COMPLETE: "NoInput" },
-            },
-            NoInput: {
-              entry: {
-                type: "spst.speak",
-                params: { utterance: "I didn't catch that. Try again." },
-              },
-              on: { SPEAK_COMPLETE: "Listen" },
-            },
-
-            Listen: {
-              entry: { type: "spst.listen" },
-              on: {
-                RECOGNISED: [
-                  {
-                    guard: isGlobalCommand,
-                    target: "#Core.HandleCommand",
-                    actions: { type: "storeCommand" },
-                  },
-                  {
-                    actions: assign(({ event }) => ({
-                      lastResult: event.value,
-                      interpretation: event.nluValue,
-                    })),
-                  },
-                ],
-                ASR_NOINPUT: {
-                  actions: { type: "clearCache" },
-                  target: "WaitReadyNoInput",
-                },
-                LISTEN_COMPLETE: [
-                  { target: "Transform", guard: ({ context }) => !!context.lastResult },
-                ],
-              },
-            },
-            Transform: {
-              entry: {
-                type: "spst.speak",
-                params: ({ context }) => ({
-                  utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel),
-                }),
-              },
-              on: { SPEAK_COMPLETE: "Listen" },
-            },
-          },
         },
         // == Singleplayer Mode =========================================================================================
         Singleplayer: {

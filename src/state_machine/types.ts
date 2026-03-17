@@ -28,7 +28,9 @@ export interface DMContext {
   lastResult: Hypothesis[] | null;
   interpretation: NLUObject | null;
   confirm: boolean;
-  current: string,
+  currentListener: string,
+  temp: string,
+  target: string,
   targetVowel: string;
   targetCategory: string;
   targetGameMode: string | null;
