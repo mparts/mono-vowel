@@ -3,8 +3,9 @@ import { speechstate } from "speechstate";
 import type { DMContext, DMEvents } from "./types";
 import { settings } from "../azure/azure_credentials";
 import { getTopIntent, getEntity, getEntityResolution } from "./helpers"; // NLU helpers
-import {extractCategory, extractVowel, changeVowels, } from "./helpers"; // Game helpers
-import {isGlobalCommand, buildConfirmationUtterance} from "./helpers"; // General helpers
+import { extractCategory, extractVowel, changeVowels, } from "./helpers"; // Game helpers
+import {isGlobalCommand} from "./helpers"; // General helpers
+import * as utteranceBuilder from "./utterance_builders"; // Utterance builders
 
 // == State Machine =====================================================================================================
 const dmMachine = setup({
@@ -80,11 +81,11 @@ const dmMachine = setup({
                 { target: "#Boot.Greeting", guard: ({ context }) => context.lastCommand === "restart" },
                 { target: "ResetSettings", guard: ({ context }) => context.lastCommand === "reset"},
                 { target: "DefaultSettings", guard: ({ context }) => context.lastCommand === "default"},
-                { target: "#MainMenu.GetVowel", guard: ({ context }) => context.lastCommand === "change vowel",
+                { target: "#MainMenu.GetVowel", guard: ({ context }) => context.lastCommand === "vowel",
                   actions: assign({ targetVowel: "" }) },
-                { target: "#MainMenu.GetWordCategory", guard: ({ context }) => context.lastCommand === "change category",
+                { target: "#MainMenu.GetWordCategory", guard: ({ context }) => context.lastCommand === "category",
                   actions: assign({ targetCategory: "" }) },
-                { target: "#MainMenu.GetGameMode", guard: ({ context }) => context.lastCommand === "change mode",
+                { target: "#MainMenu.GetGameMode", guard: ({ context }) => context.lastCommand === "mode",
                   actions: assign({ targetGameMode: "" }) },
               ],
             },
@@ -107,7 +108,7 @@ const dmMachine = setup({
               on: { ASRTTS_READY: "NoInput", SPEAK_COMPLETE: "NoInput" },
             },
             NoInput: {
-              entry: {type: "spst.speak", params: { utterance: "I didn't catch that." },},
+              entry: {type: "spst.speak", params: () => ({ utterance: utteranceBuilder.NoInput()})},
               on: { SPEAK_COMPLETE: "Listen" },
             },
             Listen: {
@@ -137,18 +138,12 @@ const dmMachine = setup({
             hist: { type: 'history', history: 'deep'},
             CheckExistence: {
               always: [
-                { target: "ConfirmPromptInit", guard: ({ context }) => !!context.temp && context.target === "Init", actions: assign({ confirm: true })},
                 { target: "ConfirmPrompt", guard: ({ context }) => !!context.temp, actions: assign({ confirm: true })},
-                { target: "PromptInit", guard: ({ context }) => context.target === "Init"},
                 { target: "Prompt" },
               ],
             },
             Prompt: {
-              entry: { type: "spst.speak", params: ({ context }) => ({ utterance: `Please choose a ${context.target}.` })},
-              on: { SPEAK_COMPLETE: "Planner" },
-            },
-            PromptInit: {
-              entry: { type: "spst.speak", params: { utterance: "What would you like to play?" },},
+              entry: { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Getter(context.target) })},
               on: { SPEAK_COMPLETE: "Planner" },
             },
             Planner: {
@@ -175,12 +170,8 @@ const dmMachine = setup({
               ]
             },
             ConfirmPrompt: {
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: `Confirm choosing ${context.temp} as the ${context.target}?`})},
-              on: { SPEAK_COMPLETE: "ConfirmPlanner" },
-            },
-            ConfirmPromptInit: {
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: buildConfirmationUtterance(context)})},
-              on: { SPEAK_COMPLETE: {target: "ConfirmPlanner", actions: assign({confirm: true})} },
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: utteranceBuilder.Confirmation(context)})},
+              on: { SPEAK_COMPLETE: "ConfirmPlanner"},
             },
             ConfirmPlanner: {
               always: [
@@ -194,7 +185,7 @@ const dmMachine = setup({
               ],
             },
             FallbackError: {
-              entry: { type: "spst.speak", params: { utterance: "Sorry, I'm not sure how to help with that." }},
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: utteranceBuilder.Fallback(context.target)})},
               on: { SPEAK_COMPLETE: {target: "Planner", actions: {type: "clearCache"}}},
             },
           },
@@ -349,10 +340,10 @@ const dmMachine = setup({
     Game: {
       entry: assign({ currentListener: "Game" }),
       id: "Game",
-      initial: "modePicker",
+      initial: "ModePicker",
       states: {
         hist: { type: 'history', history: 'deep'},
-        modePicker: {
+        ModePicker: {
           always: [
             { target: "EchoMode", guard: ({ context }) => context.targetGameMode === "Echo",},
             { target: "Multiplayer", guard: ({ context }) => context.targetGameMode === "Multiplayer", },

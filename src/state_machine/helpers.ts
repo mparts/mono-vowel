@@ -128,26 +128,8 @@ export function changeVowels(text: string, vowel: string = "i"): string {
 }
 
 // == General helpers ===================================================================================================
-const GLOBAL_COMMANDS = ["exit", "restart", "reset", "default", "change vowel", "change mode", "change category", ];
+const GLOBAL_COMMANDS = ["exit", "restart", "reset", "default", "vowel", "mode", "category", ];
 export const isGlobalCommand = ({ event }: { event: DMEvents }) =>
   GLOBAL_COMMANDS.includes(
     (event as any).value?.[0]?.utterance?.trim().toLowerCase()
   );
-
-export function buildConfirmationUtterance(context: any): string {
-  const parts: string[] = [];
-
-  if (context.targetGameMode) {
-    parts.push(`${context.targetGameMode} game mode`);
-  }
-  if (context.targetCategory) {
-    parts.push(`category ${context.targetCategory}`);
-  }
-  if (context.targetVowel) {
-    parts.push(`vowel ${context.targetVowel}`);
-  }
-  if (parts.length === 0) {
-    return "Please confirm your choices.";
-  }
-  return `Confirm ${parts.join(", ")}?`;
-}

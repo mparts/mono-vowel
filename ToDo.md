@@ -7,7 +7,6 @@
 
 # features
 
-- randomize confirm and get utterances
 - divide natur-science categories
 - more global commands
 - better feadback to user
@@ -21,3 +20,7 @@
 # extra
 
 - swedish vowels, danish vowels
+
+# fixes
+
+- go through random utterances, trim irrelevant
