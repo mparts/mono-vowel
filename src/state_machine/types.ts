@@ -25,14 +25,21 @@ interface NLUObject {
 // == Machine context and events exports ================================================================================
 export interface DMContext {
   spstRef: ActorRef<any, any>;
+  silencerRef: ActorRef<any, any>;
   lastResult: Hypothesis[] | null;
   interpretation: NLUObject | null;
   confirm: boolean;
-  currentListener: string,
-  temp: string,
-  target: string,
+  currentListener: string;
+  roundCount: number;
+  targetGuess: string;
+  targetWord: string;
+  guessCount: number;
+  team1score: number;
+  team2score: number;
+  temp: string;
+  target: string;
   targetVowel: string;
-  targetCategory: string;
+  targetCategory: string | null;
   targetGameMode: string | null;
   lastCommand: string | null;
 }

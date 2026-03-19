@@ -19,8 +19,10 @@
 
 # extra
 
+- add more sound cues (like the buzzer)
 - swedish vowels, danish vowels
 
 # fixes
 
+- go through training NLU, refractor EVERYTHING
 - go through random utterances, trim irrelevant
