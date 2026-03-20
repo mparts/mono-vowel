@@ -4,18 +4,22 @@ import { parseLines } from "./utterance_builders";
 import animals_raw from './../../data/words/animals_creatures.txt?raw';
 import foods_raw from './../../data/words/foods_drinks.txt?raw';
 import objects_raw from './../../data/words/objects_items.txt?raw';
-
+import readySound from "../sounds/ready.mp3";
 
 // == NLU helpers ===================================================================================================================================
-/** Returns the top NLU intent if its confidence meets the threshold, otherwise undefined. */
-export function getTopIntent(context: DMContext, threshold = 0.7): string | undefined {
+/** Returns the top NLU intent if its confidence meets the threshold, or has more than 15% difference with the next one, otherwise undefined. */
+export function getTopIntent(context: DMContext, threshold = 0.7, minGap = 0.15): string | undefined {
   const intents = context.interpretation?.intents;
-  console.log("INTENTS:", JSON.stringify(intents, null, 2), "threshold:", threshold);
+  console.log("INTENTS:", JSON.stringify(intents, null, 2), {threshold, minGap});
   if (!intents || intents.length === 0) return undefined;
-
+  
   const top = intents[0];
-  console.log("TOP INTENT USED:", top);
-  return top.confidenceScore >= threshold ? top.category : undefined;
+  const second = intents[1];
+  const passesThreshold = top.confidenceScore >= threshold;
+  const passesGap = second && (top.confidenceScore - second.confidenceScore) > minGap;
+
+  if (passesThreshold || passesGap) { return top.category; }
+  return undefined;
 }
 /** Returns the resolved value of a named entity — prefers the ListKey, falls back to raw text. */
 export function getEntity(context: DMContext, category: string): string | undefined {
@@ -164,4 +168,9 @@ export function containsWord(text: string, word: string): boolean {
   if (!text || !word) return false;
   const pattern = new RegExp(`\\b${word}\\b`, "i");
   return pattern.test(text);
+}
+/** Plays sound, when the listener is ready. */
+export async function playReady() {
+  const audio = new Audio(readySound);
+  audio.play()
 }

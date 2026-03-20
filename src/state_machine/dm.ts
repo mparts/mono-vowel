@@ -1,12 +1,15 @@
 import { assign, createActor, setup, fromPromise} from "xstate";
 import { speechstate } from "speechstate";
 import type { DMContext, DMEvents } from "./types";
-import { settings, settingsSilencer } from "../azure/azure_credentials";
-import { getTopIntent, getEntity, getEntityResolution, containsWord } from "./helpers"; // NLU helpers
+import { settings, settingsSilencer } from "../azure_groq/azure_credentials";
+import { askGroq } from "../azure_groq/groq";
+import { getTopIntent, getEntity, getEntityResolution, containsWord} from "./helpers"; // NLU helpers
 import { extractCategory, extractVowel, changeVowels, extractGuess} from "./helpers"; // Game helpers
-import { isGlobalCommand, wordRandomizer} from "./helpers"; // General helpers
+import { isGlobalCommand, wordRandomizer, playReady} from "./helpers"; // General helpers
 import * as utteranceBuilder from "./utterance_builders"; // Utterance builders
+import startupSound from "../sounds/startup.mp3";
 import buzzerSound from "../sounds/buzzer.mp3";
+import winSound from "../sounds/win.mp3";
 
 // == State Machine =================================================================================================================================
 const dmMachine = setup({
@@ -38,10 +41,17 @@ const dmMachine = setup({
       roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0,
       confirm: false, lastResult: null, interpretation: null,  
     }),
-
   },
   actors: {
-    // added sound cues
+    // sound effects
+    playStartup: fromPromise(() => {
+      return new Promise<void>((resolve) => {
+        const audio = new Audio(startupSound);
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        audio.play().catch(() => resolve());
+      });
+    }),
     playBuzzer: fromPromise(() => {
       return new Promise<void>((resolve) => {
         const audio = new Audio(buzzerSound);
@@ -49,6 +59,18 @@ const dmMachine = setup({
         audio.onerror = () => resolve();
         audio.play().catch(() => resolve());
       });
+    }),
+    playWin: fromPromise(() => {
+      return new Promise<void>((resolve) => {
+        const audio = new Audio(winSound);
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        audio.play().catch(() => resolve());
+      });
+    }),
+    // LLM Call
+    askGroq: fromPromise(async ({ input }: { input: { prompt: string } }) => {
+      return await askGroq(input.prompt);
     }),
   }
 
@@ -106,7 +128,7 @@ const dmMachine = setup({
             Commands:{
               always: [
                 { target: "#Core.Done", guard: ({ context }) => context.lastCommand === "exit" },
-                { target: "#Boot.Greeting", guard: ({ context }) => context.lastCommand === "restart" },
+                { target: "#Boot.Greeting", guard: ({ context }) => context.lastCommand === "restart", actions: {type: "clearContext"}},
                 { target: "ResetSettings", guard: ({ context }) => context.lastCommand === "reset"},
                 { target: "DefaultSettings", guard: ({ context }) => context.lastCommand === "default"},
                 { target: "#MainMenu.GetVowel", guard: ({ context }) => context.lastCommand === "reset vowel",
@@ -130,14 +152,17 @@ const dmMachine = setup({
         // == Listener ==============================================================================================================================
         Listener: {
           id: "Listener",
-          initial: "Listen",
+          initial: "SoundCueReady",
           states: {
+            SoundCueReady: {
+              always: [{actions: () => playReady(), target: "Listen"}],
+            },
             WaitReadyNoInput: { // Check if safe to redirect
               on: { ASRTTS_READY: "NoInput", SPEAK_COMPLETE: "NoInput" },
             },
             NoInput: { // If nothing was recognised, return some feedback and retry
               entry: {type: "spst.speak", params: () => ({ utterance: utteranceBuilder.NoInput()})},
-              on: { SPEAK_COMPLETE: "Listen" },
+              on: { SPEAK_COMPLETE: "SoundCueReady" },
             },
             Listen: {
               entry: { type: "spst.listen" },
@@ -173,23 +198,30 @@ const dmMachine = setup({
                   actions: { type: "clearCache" }, target: "WaitReadyNoInput",
                 },
                 LISTEN_COMPLETE: [ // If listen succesful redirect accordingly
-                  {target: "WaitReady"}
+                  {target: "Redirect"}
                 ],
               },
             },
             WaitReadyNoInput: { // Check if safe to redirect
               on: { ASRTTS_READY: "Listen" },
             },
-            WaitReady: { // Check if safe to redirect
-              on: { 
-                ASRTTS_READY: [
-                  { target: "#Boot.Greeting", actions: { type: "clearCache" },
+            Redirect: {
+              on: {
+                ASRTTS_READY: [ // Check if safe to redirect
+                  { target: "SoundCueStartup", actions: { type: "clearCache" },
                   guard: ({ context }) => context.lastResult![0].utterance === "Wake up" && context.currentListener !== "Game"},
                   { target: "#Multiplayer.Planner", actions: { type: "clearCache" },
                   guard: ({ context }) => context.lastResult![0].utterance === "Ready" && context.currentListener === "Game"},
                   { target: "#EndlessListener", actions: { type: "clearCache" }},
-              ]},
-            }
+                ]
+              },
+            },
+            SoundCueStartup: {
+              invoke: {
+                src: "playStartup",
+                onDone: {target: "#Boot.Greeting"}
+              }
+            },
           },
         },
         // == Helps with getting stuff from user utterancies ========================================================================================
@@ -506,14 +538,6 @@ const dmMachine = setup({
               ],
               on: { SPEAK_COMPLETE: "#EndlessListener" },
             },
-            ListenCue: {
-              invoke: {
-                src: "playBuzzer",
-                onDone: {
-                  target: "Planner"
-                }
-              }
-            },
             Planner: {
               always: [
                 { target: "#Listener", guard: ({ context }) => !context.lastResult},
@@ -559,10 +583,16 @@ const dmMachine = setup({
             GuessPlanner: { // Gets the guess and redirects accordingly
               always: [
                 {target: "#GetGuess", guard: ({ context }) => !context.targetGuess},
-                {target: "Win", guard: ({ context }) => context.targetGuess === context.targetWord},
+                {target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord},
                 {target: "WaitToStart", guard: ({ context }) => context.targetGuess === "pass" && context.guessCount < 10},
                 {target: "GameOverCue", actions: assign({targetGuess: ""})},
               ]
+            },
+            WinCue: { // Play sound for game over
+              invoke: {
+                src: "playWin",
+                onDone: {target: "Win"}
+              }
             },
             Win: { // If guess was correct, increment the score
               entry: [ assign(({ context }) => context.roundCount % 2 === 1
@@ -582,13 +612,13 @@ const dmMachine = setup({
               on: {SPEAK_COMPLETE: "Evaluation"}
             },
             Evaluation: { // Speak the score and loop to start
-                entry: { type: "spst.speak", params: ({ context }) => ({ utterance: context.roundCount === 1 ? "" :
-                  `Current score is: ${context.team1score} - ${context.team2score}. ${context.team1score === context.team2score ? "It is a draw!!" : 
-                  `The ${context.team1score > context.team2score ? "First" : "Second"} team is leading!!`}`})},
-                  on: {SPEAK_COMPLETE: "SelectTeam"}
-                },
+              entry: { type: "spst.speak", params: ({ context }) => ({ utterance: context.roundCount === 1 ? "" :
+                `Current score is: ${context.team1score} - ${context.team2score}. ${context.team1score === context.team2score ? "It is a draw!!" : 
+                `The ${context.team1score > context.team2score ? "First" : "Second"} team is leading!!`}`})},
+                on: {SPEAK_COMPLETE: "SelectTeam"}
             },
           },
+        },
         // == Singleplayer Mode =========================================================================================
         Singleplayer: {
           id: "Singleplayer",

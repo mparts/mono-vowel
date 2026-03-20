@@ -1,5 +1,5 @@
 import type { Settings } from "speechstate";
-import  {SPEECH_KEY, NLU_KEY} from "./azure";
+import  {SPEECH_KEY, NLU_KEY} from "./secrets";
 
 // == Azure Related Credentials =====================================================================================================================
 const azureCredentials = {
@@ -13,7 +13,7 @@ const azureLanguageCredentials = {
   projectName: "ProjectChooseSettings",
 };
 
-// == Settings ======================================================================================================================================
+// == Settings for Azure ============================================================================================================================
 /** Settings for the standard listener */
 export const settings: Settings = {
   azureCredentials,

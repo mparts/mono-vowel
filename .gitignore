@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 
 # keys / secrets
-src/azure/azure.ts
+src/azure_groq/secrets.ts
