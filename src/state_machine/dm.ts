@@ -7,9 +7,11 @@ import { getTopIntent, getEntity, getEntityResolution, containsWord} from "./hel
 import { extractCategory, extractVowel, changeVowels, extractGuess} from "./helpers"; // Game helpers
 import { isGlobalCommand, wordRandomizer, playReady} from "./helpers"; // General helpers
 import * as utteranceBuilder from "./utterance_builders"; // Utterance builders
+// Sound effects imports
 import startupSound from "../sounds/startup.mp3";
 import buzzerSound from "../sounds/buzzer.mp3";
 import winSound from "../sounds/win.mp3";
+import gameOver from "../sounds/game_over.mp3"
 
 // == State Machine =================================================================================================================================
 const dmMachine = setup({
@@ -31,14 +33,14 @@ const dmMachine = setup({
     "clearContext": assign({
     targetGameMode: "", targetVowel: "", targetCategory: "", targetWord: "",
     temp: "", target: "", 
-    roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0,
+    roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0, groqDescription: "", retryReason: "",
     confirm: false,
     lastResult: null, interpretation: null,
     }),
     "defaultContext": assign({
-      targetGameMode: "Multiplayer", targetVowel: "o", targetCategory: extractCategory("objects"), targetWord: () => wordRandomizer(extractCategory("objects")),
+      targetGameMode: "Singleplayer", targetVowel: "o", targetCategory: extractCategory("objects"), targetWord: () => wordRandomizer(extractCategory("objects")),
       temp: "", target: "",
-      roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0,
+      roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0, groqDescription: "", retryReason: "",
       confirm: false, lastResult: null, interpretation: null,  
     }),
   },
@@ -68,6 +70,14 @@ const dmMachine = setup({
         audio.play().catch(() => resolve());
       });
     }),
+    playGameover: fromPromise(() => {
+      return new Promise<void>((resolve) => {
+        const audio = new Audio(gameOver);
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        audio.play().catch(() => resolve());
+      });
+    }),
     // LLM Call
     askGroq: fromPromise(async ({ input }: { input: { prompt: string } }) => {
       return await askGroq(input.prompt);
@@ -78,7 +88,7 @@ const dmMachine = setup({
   context: ({ spawn }) => ({
     targetGameMode: "", targetVowel: "", targetCategory: "", targetWord: "",
     temp: "", target: "", 
-    roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0,
+    roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0, groqDescription: "", retryReason: "",
     confirm: false, currentListener: "",
     lastCommand: null as string | null, lastResult: null, interpretation: null,
     spstRef: spawn(speechstate, { input: settings }),
@@ -182,7 +192,7 @@ const dmMachine = setup({
             },
           },
         },
-        // == EndlessListener ==============================================================================================================================
+        // == EndlessListener =======================================================================================================================
         EndlessListener: {
           id: "EndlessListener",
           initial: "Listen",
@@ -273,7 +283,9 @@ const dmMachine = setup({
             ConfirmPlanner: { // Grab user Yes/No and redirect accordingly
               always: [
                 { target: "#Listener", guard: ({ context }) => context.confirm === true, actions: assign({confirm: false})},
-                { target: "#Game.hist", guard: ({ context }) => getEntityResolution(context, "YesNo") === true, 
+                { target: "#Game.hist", guard: ({ context }) => getEntityResolution(context, "YesNo") === true && context.target !== "game mode", 
+                actions: [assign({ temp: "" , target: ""}), {type: "clearCache"}] },
+                { target: "#Game", guard: ({ context }) => getEntityResolution(context, "YesNo") === true, 
                 actions: [assign({ temp: "" , target: ""}), {type: "clearCache"}] },
                 { target: "Retry", guard: ({ context }) => getEntityResolution(context, "YesNo") === false,
                 actions: {type: "clearCache"} },
@@ -289,6 +301,7 @@ const dmMachine = setup({
         },
       },
     },
+
     // == Main Menu =================================================================================================================================
     MainMenu: {
       id: "MainMenu",
@@ -468,6 +481,7 @@ const dmMachine = setup({
         },
       },
     },
+
     // == Games =====================================================================================================================================
     Game: {
       entry: assign({ currentListener: "Game" }),
@@ -483,7 +497,8 @@ const dmMachine = setup({
             { target: "#MainMenu" },
           ],
         },
-        // == Echo Mode =================================================================================================
+
+        // == Echo Mode =============================================================================================================================
         EchoMode: {
           id: "EchoMode",
           initial: "Setup",
@@ -510,7 +525,8 @@ const dmMachine = setup({
             },
           },
         },
-        // == Multiplayer Mode ==========================================================================================
+
+        // == Multiplayer Mode ======================================================================================================================
         Multiplayer: {
           id: "Multiplayer",
           initial: "Setup",
@@ -533,9 +549,7 @@ const dmMachine = setup({
               on: { SPEAK_COMPLETE: "WaitToStart" },
             },
             WaitToStart: {
-              entry: [{ type: "spst.speak", params: { utterance: `Say, "Ready"!! After the beep, whisper your description!!`},},
-                assign({guessCount: ({ context }) => context.guessCount + 1})
-              ],
+              entry: { type: "spst.speak", params: { utterance: `Say, "Ready"!! After the beep, whisper your description!!`},},
               on: { SPEAK_COMPLETE: "#EndlessListener" },
             },
             Planner: {
@@ -546,7 +560,7 @@ const dmMachine = setup({
             },
             CheckWord: { // Check if the speaker accidentally included the target word in his utterance.
               always: [
-                {target: "GameOverCue", guard: ({ context }) => containsWord(context.lastResult![0].utterance, context.targetWord)},
+                {target: "RetryCue", guard: ({ context }) => containsWord(context.lastResult![0].utterance, context.targetWord), actions: assign({retryReason: "saidGuess"})},
                 {target: "Transform"}
               ]
             },
@@ -571,7 +585,7 @@ const dmMachine = setup({
                       actions: { type: "silencer.cancel" }
                     },
                     LISTEN_COMPLETE: { // If ASR grasps ANYTHING, stop and GAME OVER
-                      target: "#Multiplayer.GameOverCue", actions: { type: "clearCache" }
+                      target: "#Multiplayer.RetryCue", actions: [{ type: "clearCache" }, assign({retryReason: "brokeSilence"})]
                     },
                     ASR_NOINPUT: { // If no input was recognised, continue..
                       target: "WaitReadyNoInput", actions: { type: "clearCache" },
@@ -582,34 +596,52 @@ const dmMachine = setup({
             },
             GuessPlanner: { // Gets the guess and redirects accordingly
               always: [
-                {target: "#GetGuess", guard: ({ context }) => !context.targetGuess},
-                {target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord},
-                {target: "WaitToStart", guard: ({ context }) => context.targetGuess === "pass" && context.guessCount < 10},
-                {target: "GameOverCue", actions: assign({targetGuess: ""})},
-              ]
+                { target: "#GetGuess", guard: ({ context }) => !context.targetGuess },
+                { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 10 },
+                { target: "RetryCue", actions: assign({retryReason: "wrongGuess"}) },
+              ],
             },
-            WinCue: { // Play sound for game over
+            RetryCue: { // Play sound for retry
+              invoke: {
+                src: "playBuzzer",
+                onDone: {target: "RetryPrompt"}
+              }
+            },
+            RetryPrompt: {
+              entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
+                { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
+              ],
+              on: { SPEAK_COMPLETE: {target: "WaitToStart", actions: {type: "clearCache"}} },
+            },
+            WinCue: { // Play sound for win
               invoke: {
                 src: "playWin",
                 onDone: {target: "Win"}
               }
             },
-            Win: { // If guess was correct, increment the score
+            Win: { // Increment the score based on whose turn it was
               entry: [ assign(({ context }) => context.roundCount % 2 === 1
                     ? { team2score: context.team2score + 1 }
                     : { team1score: context.team1score + 1 }),
                 { type: "spst.speak", params: { utterance: `Your guess was correct!! You win the round!!` } },],
-              on: { SPEAK_COMPLETE: "Evaluation" },
+              on: { SPEAK_COMPLETE: "IsEndGame" },
             },
             GameOverCue: { // Play sound for game over
               invoke: {
-                src: "playBuzzer",
+                src: "playGameover",
                 onDone: {target: "GameOver"}
               }
             },
             GameOver: { // Game over
               entry: { type: "spst.speak", params: { utterance: "Game Over!! You lose the round!!" } },
-              on: {SPEAK_COMPLETE: "Evaluation"}
+              on: {SPEAK_COMPLETE: "IsEndGame"}
+            },
+            IsEndGame: { // Check if target score is reached
+              always:[
+                {target: "EndGame", guard: ({context}) => context.team1score === 3 || context.team2score === 3},
+                {target: "Evaluation"},
+              ]
             },
             Evaluation: { // Speak the score and loop to start
               entry: { type: "spst.speak", params: ({ context }) => ({ utterance: context.roundCount === 1 ? "" :
@@ -617,11 +649,199 @@ const dmMachine = setup({
                 `The ${context.team1score > context.team2score ? "First" : "Second"} team is leading!!`}`})},
                 on: {SPEAK_COMPLETE: "SelectTeam"}
             },
+            EndGame: { // End the game
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: `${context.team1score > context.team2score 
+                ? `You just scored 3 points!! Team 1 wins!!!` : `You just scored 3 points!! Team 2 wins!!!`}`,})},
+              on: { SPEAK_COMPLETE: "Setup" },
+            },
           },
         },
-        // == Singleplayer Mode =========================================================================================
+        
+        // == Singleplayer Mode =====================================================================================================================
         Singleplayer: {
           id: "Singleplayer",
+          initial: "Setup",
+          states: {
+            Setup: { // Make sure there is everything needed for the game to work
+              always: [
+                { target: "#MainMenu.GetVowel", guard: ({ context }) => !context.targetVowel },
+                { target: "#MainMenu.GetWordCategory", guard: ({ context }) => !context.targetCategory },
+                { target: "Intro" },
+              ],
+            },
+            Intro: {
+              entry: [
+                { type: "spst.speak", params: { utterance: "Singleplayer!!" } },
+                assign({ roundCount: 0, team1score: 0, team2score: 0 }),
+              ],
+              on: { SPEAK_COMPLETE: "SelectRole" },
+            },
+            SelectRole: { // Let user know whose turn it is. Also initialize important variables and redirects to the correct sequence
+              entry: [
+                assign({ roundCount: ({ context }) => context.roundCount + 1, targetWord: ({ context }) => wordRandomizer(context.targetCategory), guessCount: 0,}),
+                { type: "spst.speak", params: ({ context }) => ({
+                  utterance: context.roundCount % 2 !== 0
+                    ? `Round ${context.roundCount}. Your turn to describe!!`
+                    : `Round ${context.roundCount}. My turn to describe!! Try to guess the word!!`,
+                })},
+              ],
+              on: { SPEAK_COMPLETE: [
+                { target: "PlayerDescribes", guard: ({ context }) => context.roundCount % 2 !== 0 },
+                { target: "GroqDescribes" },
+              ]},
+            },
+
+            // == Odd rounds: Player describes, Groq guesses ========================================================================================
+            PlayerDescribes: {
+              always: [
+                { target: "#Listener", guard: ({ context }) => !context.lastResult },
+                { target: "CheckPlayerWord", guard: ({ context }) => !!context.lastResult },
+              ],
+            },
+            CheckPlayerWord: { // Check if the speaker accidentally included the target word in his utterance.
+              always: [
+                { target: "RetryCue", guard: ({ context }) => containsWord(context.lastResult![0].utterance, context.targetWord), actions: assign({retryReason: "saidGuess"})},
+                { target: "Transform" },
+              ],
+            },
+            Transform: { // Change the vowels in the utterance
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
+              on: { SPEAK_COMPLETE: {target: "GroqGuessing", actions: [{ type: "clearCache" }, assign({targetGuess: ""}) ]} }
+            },
+            GroqGuessing: { // Tap into the LLM to decypher the message and get a guess.
+              invoke: {
+                src: "askGroq",
+                input: ({ context }) => ({
+                  prompt: `You are playing a word guessing game. The category is "${context.targetCategory}". 
+                  Someone described a word using only vowel-changed speech (all vowels replaced with "${context.targetVowel}").
+                  The description was: "${changeVowels(context.lastResult![0].utterance, context.targetVowel)}".
+                  Respond with ONLY one single word — your best guess for what the target word is.`,
+                }),
+                onDone: {
+                  target: "EvaluateGroqGuess",
+                  actions: assign({ targetGuess: ({ event }) => event.output.trim().toLowerCase() }),
+                },
+              },
+            },
+            EvaluateGroqGuess: { // Groq makes guess
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: `I think the word is... ${context.targetGuess}`,})},
+              on: { SPEAK_COMPLETE: "CheckGroqGuess" },
+            },
+            CheckGroqGuess: { // Redirect based on the guess and the guess count
+              always: [
+                { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 10 },
+                { target: "RetryCue", actions: assign({retryReason: "wrongGuess"}) },
+              ],
+            },
+            RetryCue: { // Play sound for retry
+              invoke: {
+                src: "playBuzzer",
+                onDone: {target: "RetryPrompt"}
+              }
+            },
+            RetryPrompt: { // Increment guess gount by one, give back some feedback to user and retry
+               entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
+                { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.RetryPlayer(context.retryReason)})},
+              ],
+              on: { SPEAK_COMPLETE: {target: "PlayerDescribes", actions: {type: "clearCache"}} },
+            },
+
+            // == Even rounds: Groq describes, Player guesses =======================================================================================
+            GroqDescribes: { // Groq tries to describe a word
+              invoke: {
+                src: "askGroq",
+                input: ({ context }) => ({
+                  prompt: `You are playing a word guessing game. Describe the word "${context.targetWord}" from the category "${context.targetCategory}" 
+                  without saying the word itself. Keep it to 1-2 sentences, simple and clear.`,
+                }),
+                onDone: {
+                  target: "TransformGroq",
+                  actions: assign({ groqDescription: ({ event }) => event.output.trim() }),
+                },
+              },
+            },
+            TransformGroq: { // Change the vowels in the utterance
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: changeVowels(context.groqDescription, context.targetVowel)})},
+              on: { SPEAK_COMPLETE: {target: "PlayerGuessing", actions: [{ type: "clearCache" }, assign({targetGuess: ""}) ]} }
+            },
+            PlayerGuessing: { // Player makes a guess
+              always: [
+                { target: "#GetGuess", guard: ({ context }) => !context.targetGuess },
+                { target: "CheckPlayerGuess", guard: ({ context }) => !!context.targetGuess },
+              ],
+            },
+            CheckPlayerGuess: { // Redirect based on the player guess
+              always: [
+                { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 10 },
+                { target: "RetryCueGroq" },
+              ],
+            },
+            RetryCueGroq: { // Play sound for retry
+              invoke: {
+                src: "playBuzzer",
+                onDone: {target: "RetryGroqDescribe"}
+              }
+            },
+            RetryGroqDescribe: { // Increment guess gount by one, give back some feedback to user and retry
+              entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
+                { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
+              ],
+              on: { SPEAK_COMPLETE: {target: "GroqDescribes", actions: {type: "clearCache"}}},
+            },
+
+            // == Shared end states =================================================================================================================
+            WinCue: { // Win sound
+              invoke: {
+                src: "playWin",
+                onDone: { target: "Win" },
+              },
+            },
+            Win: { // Score Increment
+              entry: [
+                assign(({ context }) => context.roundCount % 2 !== 0
+                  ? { team1score: context.team1score + 1 }  // player described correctly
+                  : { team2score: context.team2score + 1 }  // player guessed correctly
+                ),
+                { type: "spst.speak", params: { utterance: "Correct!! You win the round!!" } },
+              ],
+              on: { SPEAK_COMPLETE: "IsEndGame" },
+            },
+            GameOverCue: { // Game over sound
+              invoke: {
+                src: "playGameover",
+                onDone: { target: "GameOver" },
+              },
+            },
+            GameOver: { // Game over utterance
+              entry: { type: "spst.speak", params: ({ context }) => ({
+                utterance: `Game over!! The word was ${context.targetWord}!!`,
+              })},
+              on: { SPEAK_COMPLETE: "IsEndGame" },
+            },
+            IsEndGame: { // Check if target score is reached
+              always:[
+                {target: "EndGame", guard: ({context}) => context.team1score === 3 || context.team2score === 3},
+                {target: "Evaluation"},
+              ]
+            },
+            Evaluation: { // Return some feedback to the user and start new round
+              entry: { type: "spst.speak", params: ({ context }) => ({
+                utterance: context.roundCount === 1 ? "" :
+                  `Current score — You: ${context.team1score}, Me: ${context.team2score}. ${
+                    context.team1score === context.team2score ? "We are tied!!" :
+                    context.team1score > context.team2score ? "You are leading!!" : "I am leading!!"
+                  }`,
+              })},
+              on: { SPEAK_COMPLETE: "SelectRole" },
+            },
+            EndGame: { // End the game
+              entry: { type: "spst.speak", params: ({ context }) => ({utterance: `${context.team1score > context.team2score 
+                ? "You just scored 3 points!! You win!!!" : "I just scored 3 points!! I win!!!"}`,})},
+              on: { SPEAK_COMPLETE: "Setup" },
+            },
+          },
         },
       },
     },

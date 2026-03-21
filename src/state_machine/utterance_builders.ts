@@ -55,3 +55,25 @@ export function Getter(target: string): string {
   }
   return getter_utterances[Math.floor(Math.random() * getter_utterances.length)] + ` ${target}`;
 }
+/** Returns an utterance, depending on what the reason of loosing a gues was. */
+export function Retry(reason: string): string {
+  if (reason === "wrongGuess") {
+    return "Wrong guess!!";
+  }
+  if (reason === "brokeSilence") {
+    return "You weren't supposed to speak!!";
+  }
+  if (reason === "saidGuess") {
+    return "You weren't supposed to say the target word!!";
+  }
+return "Try describing again!!"
+}
+export function RetryPlayer(reason: string): string {
+  if (reason === "wrongGuess") {
+    return "Hmm.. seems that I guessed wrong.. Can you describe it again?";
+  }
+  if (reason === "saidGuess") {
+    return "Oh no!! You weren't supposed to say the target word..";
+  }
+return "Try describing again!!"
+}

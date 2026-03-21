@@ -36,6 +36,8 @@ export interface DMContext {
   guessCount: number;
   team1score: number;
   team2score: number;
+  groqDescription: string,
+  retryReason: string,
   temp: string;
   target: string;
   targetVowel: string;

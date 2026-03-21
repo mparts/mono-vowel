@@ -13,13 +13,8 @@
 - better feadback to user
 - add more sound cues (like the buzzer)
 
-# game
-
-- add llm api to conversate, or decypher user utterance
-- complete singleplayer
-
 # fixes
 
-- go through training NLU, refractor EVERYTHING
-- go through random utterances, trim irrelevant
-- multiplayer feels clanky
+- go through training NLU, refractor EVERYTHING (REMOVE ECHO from INTENTS, and place it as the default - Demo version)
+- go through random utterances, trim irrelevant. FIX ASAP!! Important!!
+- multiplayer feels clanky, trim utterances, move tips to HUD (same for singleplayer)

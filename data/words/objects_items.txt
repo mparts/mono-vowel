@@ -28,7 +28,6 @@ hammer
 hat
 key
 lamp
-lock
 map
 mirror
 mug
