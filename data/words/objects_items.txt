@@ -23,7 +23,7 @@ flag
 fork
 frame
 glass
-glove
+gloves
 hammer
 hat
 key

@@ -38,6 +38,8 @@ export interface DMContext {
   team2score: number;
   groqDescription: string,
   retryReason: string,
+  previousDescriptions: string[],
+  previousGuesses: string[],
   temp: string;
   target: string;
   targetVowel: string;

@@ -34,12 +34,12 @@ const dmMachine = setup({
     targetGameMode: "", targetVowel: "", targetCategory: "", targetWord: "",
     temp: "", target: "", 
     roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0, groqDescription: "", retryReason: "",
-    confirm: false,
+    confirm: false, previousDescriptions: [], previousGuesses: [],
     lastResult: null, interpretation: null,
     }),
     "defaultContext": assign({
       targetGameMode: "Singleplayer", targetVowel: "o", targetCategory: extractCategory("objects"), targetWord: () => wordRandomizer(extractCategory("objects")),
-      temp: "", target: "",
+      temp: "", target: "", previousDescriptions: [], previousGuesses: [],
       roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0, groqDescription: "", retryReason: "",
       confirm: false, lastResult: null, interpretation: null,  
     }),
@@ -89,6 +89,8 @@ const dmMachine = setup({
     targetGameMode: "", targetVowel: "", targetCategory: "", targetWord: "",
     temp: "", target: "", 
     roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0, groqDescription: "", retryReason: "",
+    previousDescriptions: [],
+    previousGuesses: [],
     confirm: false, currentListener: "",
     lastCommand: null as string | null, lastResult: null, interpretation: null,
     spstRef: spawn(speechstate, { input: settings }),
@@ -598,7 +600,7 @@ const dmMachine = setup({
               always: [
                 { target: "#GetGuess", guard: ({ context }) => !context.targetGuess },
                 { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
-                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 10 },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5 },
                 { target: "RetryCue", actions: assign({retryReason: "wrongGuess"}) },
               ],
             },
@@ -678,7 +680,8 @@ const dmMachine = setup({
             },
             SelectRole: { // Let user know whose turn it is. Also initialize important variables and redirects to the correct sequence
               entry: [
-                assign({ roundCount: ({ context }) => context.roundCount + 1, targetWord: ({ context }) => wordRandomizer(context.targetCategory), guessCount: 0,}),
+                assign({ roundCount: ({ context }) => context.roundCount + 1, targetWord: ({ context }) => wordRandomizer(context.targetCategory),
+                guessCount: 0, previousDescriptions: [], previousGuesses: []}),
                 { type: "spst.speak", params: ({ context }) => ({
                   utterance: context.roundCount % 2 !== 0
                     ? `Round ${context.roundCount}. Your turn to describe!!`
@@ -706,7 +709,7 @@ const dmMachine = setup({
             },
             Transform: { // Change the vowels in the utterance
               entry: { type: "spst.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
-              on: { SPEAK_COMPLETE: {target: "GroqGuessing", actions: [{ type: "clearCache" }, assign({targetGuess: ""}) ]} }
+              on: { SPEAK_COMPLETE: {target: "GroqGuessing", actions: assign({targetGuess: ""}) } }
             },
             GroqGuessing: { // Tap into the LLM to decypher the message and get a guess.
               invoke: {
@@ -715,11 +718,13 @@ const dmMachine = setup({
                   prompt: `You are playing a word guessing game. The category is "${context.targetCategory}". 
                   Someone described a word using only vowel-changed speech (all vowels replaced with "${context.targetVowel}").
                   The description was: "${changeVowels(context.lastResult![0].utterance, context.targetVowel)}".
-                  Respond with ONLY one single word — your best guess for what the target word is.`,
+                  Respond with ONLY one single word — your best guess for what the target word is. You have already used these words as guesses,
+                  do NOT repeat them: ${context.previousGuesses.join(" | ")}`,
                 }),
                 onDone: {
                   target: "EvaluateGroqGuess",
-                  actions: assign({ targetGuess: ({ event }) => event.output.trim().toLowerCase() }),
+                  actions: assign({ targetGuess: ({ event }) => event.output.trim().toLowerCase(),
+                  previousGuesses: ({ context, event }) => [...context.previousGuesses, event.output.trim()],}),
                 },
               },
             },
@@ -730,7 +735,7 @@ const dmMachine = setup({
             CheckGroqGuess: { // Redirect based on the guess and the guess count
               always: [
                 { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
-                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 10 },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5 },
                 { target: "RetryCue", actions: assign({retryReason: "wrongGuess"}) },
               ],
             },
@@ -740,7 +745,7 @@ const dmMachine = setup({
                 onDone: {target: "RetryPrompt"}
               }
             },
-            RetryPrompt: { // Increment guess gount by one, give back some feedback to user and retry
+            RetryPrompt: { // Increment guess up by one, give back some feedback to user and retry
                entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
                 { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.RetryPlayer(context.retryReason)})},
               ],
@@ -753,11 +758,13 @@ const dmMachine = setup({
                 src: "askGroq",
                 input: ({ context }) => ({
                   prompt: `You are playing a word guessing game. Describe the word "${context.targetWord}" from the category "${context.targetCategory}" 
-                  without saying the word itself. Keep it to 1-2 sentences, simple and clear.`,
+                  without saying the word itself. Keep it to 1 sentence, simple and clear. You have already used these descriptions, 
+                  you can repeat certain parts, but try a slightly different approach, do NOT just duplicate them: ${context.previousDescriptions.join(" | ")}`,
                 }),
                 onDone: {
                   target: "TransformGroq",
-                  actions: assign({ groqDescription: ({ event }) => event.output.trim() }),
+                  actions: assign({ groqDescription: ({ event }) => event.output.trim(), 
+                  previousDescriptions: ({ context, event }) => [...context.previousDescriptions, event.output.trim()],}),
                 },
               },
             },
@@ -774,7 +781,7 @@ const dmMachine = setup({
             CheckPlayerGuess: { // Redirect based on the player guess
               always: [
                 { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
-                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 10 },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5 },
                 { target: "RetryCueGroq" },
               ],
             },
@@ -798,12 +805,8 @@ const dmMachine = setup({
                 onDone: { target: "Win" },
               },
             },
-            Win: { // Score Increment
-              entry: [
-                assign(({ context }) => context.roundCount % 2 !== 0
-                  ? { team1score: context.team1score + 1 }  // player described correctly
-                  : { team2score: context.team2score + 1 }  // player guessed correctly
-                ),
+            Win: { // Increment +1 to player if player guesses or describes correctly.
+              entry: [assign({ team1score: ({ context }) => context.team1score + 1 }),
                 { type: "spst.speak", params: { utterance: "Correct!! You win the round!!" } },
               ],
               on: { SPEAK_COMPLETE: "IsEndGame" },
@@ -814,10 +817,9 @@ const dmMachine = setup({
                 onDone: { target: "GameOver" },
               },
             },
-            GameOver: { // Game over utterance
-              entry: { type: "spst.speak", params: ({ context }) => ({
-                utterance: `Game over!! The word was ${context.targetWord}!!`,
-              })},
+            GameOver: { // Increment +1 to groq if player guesse or describes incorrectly.
+              entry: [assign({ team2score: ({ context }) => context.team2score + 1 }),
+                { type: "spst.speak", params: ({ context }) => ({utterance: `Game over!! The word was ${context.targetWord}!!`,})},],
               on: { SPEAK_COMPLETE: "IsEndGame" },
             },
             IsEndGame: { // Check if target score is reached

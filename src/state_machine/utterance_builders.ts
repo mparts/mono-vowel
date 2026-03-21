@@ -55,7 +55,7 @@ export function Getter(target: string): string {
   }
   return getter_utterances[Math.floor(Math.random() * getter_utterances.length)] + ` ${target}`;
 }
-/** Returns an utterance, depending on what the reason of loosing a gues was. */
+/** Returns an utterance, depending on what the reason of loosing a guess was. */
 export function Retry(reason: string): string {
   if (reason === "wrongGuess") {
     return "Wrong guess!!";
@@ -68,6 +68,7 @@ export function Retry(reason: string): string {
   }
 return "Try describing again!!"
 }
+/** Returns an utterance, depending on what the reason of loosing a guess was. */
 export function RetryPlayer(reason: string): string {
   if (reason === "wrongGuess") {
     return "Hmm.. seems that I guessed wrong.. Can you describe it again?";
