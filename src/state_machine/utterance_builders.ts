@@ -1,10 +1,13 @@
 //  == Data Imports and Loader ======================================================================================================================
-
 import fallback_raw from './../../data/utterances/fallback.txt?raw';
 import noinput_raw from './../../data/utterances/noinput.txt?raw';
 import getter_raw from './../../data/utterances/choose_target.txt?raw';
 import getter_init_raw from './../../data/utterances/initialize.txt?raw';
 import confirm_raw from './../../data/utterances/confirm.txt?raw';
+import wronguess_raw from './../../data/utterances/wrong_guess.txt?raw';
+import madesound_raw from './../../data/utterances/made_sound.txt?raw';
+import outofguess_raw from './../../data/utterances/outof_guess.txt?raw';
+import spoketarget_raw from './../../data/utterances/spoke_target.txt?raw';
 
 /** Splits a raw text string into a trimmed, non-empty array of lines. Used to load word/utterance lists from .txt files. */
 export function parseLines(text: string): string[] {
@@ -15,7 +18,10 @@ const noinput_utterances = parseLines(noinput_raw);
 const getter_utterances = parseLines(getter_raw);
 const getter_init_utterances = parseLines(getter_init_raw);
 const confirm_utterances = parseLines(confirm_raw);
-
+const wrong_guess = parseLines(wronguess_raw);
+const made_sound = parseLines(madesound_raw)
+const outof_guess = parseLines(outofguess_raw)
+const spoke_target = parseLines(spoketarget_raw)
 
 // == Utterance builders / randomizers ==============================================================================================================
 /** Builds a confirmation prompt. For "Init" target, lists all chosen settings; otherwise names the single chosen value and its target. */
@@ -58,23 +64,34 @@ export function Getter(target: string): string {
 /** Returns an utterance, depending on what the reason of loosing a guess was. */
 export function Retry(reason: string): string {
   if (reason === "wrongGuess") {
-    return "Wrong guess!!";
+    return wrong_guess[Math.floor(Math.random() * wrong_guess.length)];
   }
   if (reason === "brokeSilence") {
-    return "You weren't supposed to speak!!";
-  }
-  if (reason === "saidGuess") {
-    return "You weren't supposed to say the target word!!";
+    return made_sound[Math.floor(Math.random() * made_sound.length)];
   }
 return "Try describing again!!"
 }
 /** Returns an utterance, depending on what the reason of loosing a guess was. */
-export function RetryPlayer(reason: string): string {
-  if (reason === "wrongGuess") {
-    return "Hmm.. seems that I guessed wrong.. Can you describe it again?";
+export function GameOver(reason: string): string {
+  if (reason === "maxGuess") {
+    return outof_guess[Math.floor(Math.random() * outof_guess.length)];
   }
   if (reason === "saidGuess") {
-    return "Oh no!! You weren't supposed to say the target word..";
+    return spoke_target[Math.floor(Math.random() * spoke_target.length)];
   }
 return "Try describing again!!"
 }
+
+// == Greeting Builder ==============================================================================================================================
+export const vowelina_intro = "Oh, Hahah... hello there!! I dozed off a little bit, and I didn't hear you approach.. Well, I am Vowelina!! And the fella next to me is my younger brother, Mono. Since birth, Mono has had some slight trouble with speaking, and sadly most people cannot really understand him, so we've always been travelling together!!";
+export const mono1 = "Hello there!! I am Mono!! ";
+export const mono2 = "I can do all vowels!! And I understand speech, just as well as the next person!! ";
+export const mono3 = "But I can only do one vowel at a time.. ";
+export const vowelina_mono = "Well.. that's Mono!! As he said, all vowels, but only one at a time.. Most people would consider this a disability.. but we've turned this quirk of his into the best game ever!! What do you say we...";
+export const vowelina_raptor ="Ahh yes... Raptor!! He always jokes arround, telling people that he is a god and can alter time and space!! What a jester!! What he is actually really usefull for, is helping us play our games!!";
+export const raptor_intro = `I am. Inter.Raptor!! Poor Vowelina and Mono. They think they are real human beings like you.. they don't realize they are nothing more than ssml sequences.. They, also think. that I am joking.. But I can indeed. Alter time!! I am a god afterall.. Whenever, you. feel like, it. Say one, of the Global. Commands. And I, will, take, over!! Also, I will be. Giving you tips, through the. HUD.`
+export const vowelina_outro = "Mono have came up with two game modes, multiplayer pvp and singleplayer pve. If you are at least 4 people, you could play against each other!! Otherwise, we can always just play together!! But first, go ahead and conversate with Mono, see what all of this is about!!";
+
+// == Game modes Intos ==============================================================================================================================
+export const multiplayer = `Multiplayer!! Begin by forming two teams. At the beginning of each round, Raptor is going to pick a random word. The leader of the team, whispers a description of the word to Mono. Then, the rest of the team has 10 seconds to decypher what Mono said, and provide a guess. Each team, has 5 retries. The leader must not include the word in their description, and must not communicate with their team, via any means. First team to correctly guess three times is the winner.`
+export const singleplayer = "Singleplayer!! At the beginning of each round, Raptor is going to pick a random word for us. We take turns into describing and guessing. There are 5 retries available each round. You get a point when you or I guess correctly. I get a point when you or I am out of retries. First one to reach 3 points wins. You must not use the target word, in your description."

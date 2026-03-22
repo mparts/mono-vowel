@@ -1,17 +1,17 @@
 import { assign, createActor, setup, fromPromise} from "xstate";
 import { speechstate } from "speechstate";
 import type { DMContext, DMEvents } from "./types";
-import { settings, settingsSilencer } from "../azure_groq/azure_credentials";
+import { settings, settingsJenny, settingsSilencer } from "../azure_groq/azure_credentials";
 import { askGroq } from "../azure_groq/groq";
 import { getTopIntent, getEntity, getEntityResolution, containsWord} from "./helpers"; // NLU helpers
 import { extractCategory, extractVowel, changeVowels, extractGuess} from "./helpers"; // Game helpers
 import { isGlobalCommand, wordRandomizer, playReady} from "./helpers"; // General helpers
 import * as utteranceBuilder from "./utterance_builders"; // Utterance builders
 // Sound effects imports
-import startupSound from "../sounds/startup.mp3";
 import buzzerSound from "../sounds/buzzer.mp3";
 import winSound from "../sounds/win.mp3";
-import gameOver from "../sounds/game_over.mp3"
+import gameOver from "../sounds/game_over.mp3";
+import wordUnblur from "../sounds/word_unblur.mp3";
 
 // == State Machine =================================================================================================================================
 const dmMachine = setup({
@@ -21,8 +21,12 @@ const dmMachine = setup({
   },
   actions: {
     // Standard speak and listen.
-    "spst.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
+    "mono.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
       context.spstRef.send({ type: "SPEAK",value: { utterance: params.utterance }});},
+    "vowelina.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
+      context.jennyRef.send({ type: "SPEAK",value: { utterance: params.utterance }});},
+    "raptor.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
+      context.silencerRef.send({ type: "SPEAK",value: { utterance: `<prosody rate="-20.00%" pitch="-20.00%">${params.utterance}</prosody>` }});},
     "spst.listen": ({ context }) => context.spstRef.send({ type: "LISTEN", value: { nlu: true }}),
     // Silencer listen and cancel.
     "silencer.listen": ({ context }) => context.silencerRef.send({ type: "LISTEN", value: { nlu: true }}),
@@ -46,14 +50,6 @@ const dmMachine = setup({
   },
   actors: {
     // sound effects
-    playStartup: fromPromise(() => {
-      return new Promise<void>((resolve) => {
-        const audio = new Audio(startupSound);
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        audio.play().catch(() => resolve());
-      });
-    }),
     playBuzzer: fromPromise(() => {
       return new Promise<void>((resolve) => {
         const audio = new Audio(buzzerSound);
@@ -78,6 +74,14 @@ const dmMachine = setup({
         audio.play().catch(() => resolve());
       });
     }),
+    playUnblur: fromPromise(() => {
+      return new Promise<void>((resolve) => {
+        const audio = new Audio(wordUnblur);
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        audio.play().catch(() => resolve());
+      });
+    }),
     // LLM Call
     askGroq: fromPromise(async ({ input }: { input: { prompt: string } }) => {
       return await askGroq(input.prompt);
@@ -95,6 +99,7 @@ const dmMachine = setup({
     lastCommand: null as string | null, lastResult: null, interpretation: null,
     spstRef: spawn(speechstate, { input: settings }),
     silencerRef: spawn(speechstate, { input: settingsSilencer }),
+    jennyRef: spawn(speechstate, { input: settingsJenny})
   }),
   id: "DM",
   initial: "Core",
@@ -112,7 +117,8 @@ const dmMachine = setup({
             Prepare: { 
               entry: [
                 ({ context }) => context.spstRef.send({ type: "PREPARE" }),
-                ({ context }) => context.silencerRef.send({ type: "PREPARE" })
+                ({ context }) => context.jennyRef.send({ type: "PREPARE" }),
+                ({ context }) => context.silencerRef.send({ type: "PREPARE" }),
               ],
               on: { ASRTTS_READY: "WaitForClick" },
             },
@@ -120,14 +126,43 @@ const dmMachine = setup({
               on: { CLICK: "#EndlessListener" },
             },
             Greeting: {
-              entry: {type: "spst.speak", params: { utterance: "Hey!" },},
-              on: { SPEAK_COMPLETE: "#Game" },
+              initial: "VowelinaIntro",
+              states: {
+                VowelinaIntro: {
+                  entry: {type: "vowelina.speak", params: { utterance: utteranceBuilder.vowelina_intro },},
+                  on: { SPEAK_COMPLETE: "MonoIntro" },
+                },
+                MonoIntro: {
+                  entry: {type: "mono.speak", params: { utterance: `${changeVowels(utteranceBuilder.mono1)}${changeVowels(utteranceBuilder.mono2, "e")}${changeVowels(utteranceBuilder.mono3, "a")}`},},
+                  on: { SPEAK_COMPLETE: "VowelinaMono" },
+                },
+                VowelinaMono: {
+                  entry: {type: "vowelina.speak", params: { utterance: utteranceBuilder.vowelina_mono },},
+                  on: { SPEAK_COMPLETE: "Raptor" },
+                },
+                Raptor: {
+                  entry: {type: "raptor.speak", params: { utterance: `You forgot, About. Me.` },},
+                  on: { SPEAK_COMPLETE: "VowelinaRaptor" },
+                },
+                VowelinaRaptor: {
+                  entry: {type: "vowelina.speak", params: { utterance: utteranceBuilder.vowelina_raptor },},
+                  on: { SPEAK_COMPLETE: "RaptorIntro" },
+                },
+                RaptorIntro: {
+                  entry: {type: "raptor.speak", params: { utterance: utteranceBuilder.raptor_intro },},
+                  on: { SPEAK_COMPLETE: "VowelinaOutro" },
+                },
+                VowelinaOutro: {
+                  entry: {type: "vowelina.speak", params: { utterance: utteranceBuilder.vowelina_outro },},
+                  on: { SPEAK_COMPLETE: {target: "#EchoMode", actions: assign({targetVowel: "o"}) } },
+                }
+              }
             },
           },
         },
         // == Exit ==================================================================================================================================
         Done: {
-          entry: [ {type: "clearContext"}, { type: "spst.speak", params: { utterance: "Thanks for playing!!!" } }],
+          entry: [ {type: "clearContext"}, { type: "raptor.speak", params: { utterance: "Thanks for playing!!!" } }],
           on: { SPEAK_COMPLETE: "#Boot.WaitForClick" },
         },
         // == Redirects global commands =============================================================================================================
@@ -152,11 +187,11 @@ const dmMachine = setup({
               ],
             },
             DefaultSettings: {
-              entry: [{type: "defaultContext"}, { type: "spst.speak", params: { utterance: "Default settings applied." } }],
+              entry: [{type: "defaultContext"}, { type: "raptor.speak", params: { utterance: "Default settings applied." } }],
               on: { SPEAK_COMPLETE: "#Game"}
             },
             ResetSettings: {
-              entry: [{type: "clearContext"}, { type: "spst.speak", params: { utterance: "Settings reset." } }],
+              entry: [{type: "clearContext"}, { type: "raptor.speak", params: { utterance: "Settings reset." } }],
               on: { SPEAK_COMPLETE: "#Game" }
             },
           },
@@ -173,7 +208,7 @@ const dmMachine = setup({
               on: { ASRTTS_READY: "NoInput", SPEAK_COMPLETE: "NoInput" },
             },
             NoInput: { // If nothing was recognised, return some feedback and retry
-              entry: {type: "spst.speak", params: () => ({ utterance: utteranceBuilder.NoInput()})},
+              entry: {type: "raptor.speak", params: () => ({ utterance: utteranceBuilder.NoInput()})},
               on: { SPEAK_COMPLETE: "SoundCueReady" },
             },
             Listen: {
@@ -203,7 +238,7 @@ const dmMachine = setup({
               entry: { type: "spst.listen" },
               on: {
                 RECOGNISED: [ // Check if user utterance was a global command, store it and redirect
-                  { target: "#Core.HandleCommand", guard: isGlobalCommand, actions: { type: "storeCommand" },},
+                  { target: "#Core.HandleCommand", guard: isGlobalCommand , actions: { type: "storeCommand" },},
                   { actions: assign(({ event }) => ({ lastResult: event.value, interpretation: event.nluValue})),},
                 ],
                 ASR_NOINPUT: {
@@ -220,19 +255,13 @@ const dmMachine = setup({
             Redirect: {
               on: {
                 ASRTTS_READY: [ // Check if safe to redirect
-                  { target: "SoundCueStartup", actions: { type: "clearCache" },
+                  { target: "#Boot.Greeting", actions: { type: "clearCache" },
                   guard: ({ context }) => context.lastResult![0].utterance === "Wake up" && context.currentListener !== "Game"},
                   { target: "#Multiplayer.Planner", actions: { type: "clearCache" },
                   guard: ({ context }) => context.lastResult![0].utterance === "Ready" && context.currentListener === "Game"},
                   { target: "#EndlessListener", actions: { type: "clearCache" }},
                 ]
               },
-            },
-            SoundCueStartup: {
-              invoke: {
-                src: "playStartup",
-                onDone: {target: "#Boot.Greeting"}
-              }
             },
           },
         },
@@ -250,7 +279,7 @@ const dmMachine = setup({
               ],
             },
             Prompt: { // Ask for the target needed, e.g a vowel
-              entry: { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Getter(context.target) })},
+              entry: { type: "raptor.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Getter(context.target) })},
               on: { SPEAK_COMPLETE: "Planner" },
             },
             Planner: { // listen until we have a user utterance, then redirect
@@ -279,7 +308,7 @@ const dmMachine = setup({
               ]
             },
             ConfirmPrompt: { // Ask user if what the ASR recognised is what they wanted to do
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: utteranceBuilder.Confirmation(context)})},
+              entry: { type: "raptor.speak", params: ({ context }) => ({utterance: utteranceBuilder.Confirmation(context)})},
               on: { SPEAK_COMPLETE: "ConfirmPlanner"},
             },
             ConfirmPlanner: { // Grab user Yes/No and redirect accordingly
@@ -292,11 +321,11 @@ const dmMachine = setup({
                 { target: "Retry", guard: ({ context }) => getEntityResolution(context, "YesNo") === false,
                 actions: {type: "clearCache"} },
                 { target: "ConfirmPrompt", guard: ({ context }) => !getEntityResolution(context, "YesNo"),
-                  actions: [{type: "spst.speak", params: { utterance: "Please answer yes or no." } }, assign({confirm: true}) ]},
+                  actions: [{type: "raptor.speak", params: { utterance: "Please answer yes or no." } }, assign({confirm: true}) ]},
               ],
             },
             FallbackError: { // If user utterance doesn't satisfy what we are trying to get, ask again.
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: utteranceBuilder.Fallback(context.target)})},
+              entry: { type: "raptor.speak", params: ({ context }) => ({utterance: utteranceBuilder.Fallback(context.target)})},
               on: { SPEAK_COMPLETE: {target: "Planner", actions: {type: "clearCache"}}},
             },
           },
@@ -327,7 +356,6 @@ const dmMachine = setup({
                 // get game mode
                 const mode = getTopIntent(context);
                 const modeMap: Record<string, string> = {
-                  ChooseRepeatGame: "Echo",
                   ChooseMultiplayer: "Multiplayer",
                   ChooseSinglePlayer: "Singleplayer"};
                 // get vowel
@@ -370,7 +398,6 @@ const dmMachine = setup({
               entry: assign(({ context }) => {
                 const intent = getTopIntent(context);
                 const modeMap: Record<string, string> = {
-                  ChooseRepeatGame: "Echo",
                   ChooseMultiplayer: "Multiplayer",
                   ChooseSinglePlayer: "Singleplayer"
                 };
@@ -493,7 +520,6 @@ const dmMachine = setup({
         hist: { type: 'history', history: 'deep'},
         ModePicker: { // If there is a game mode stored, redirect accordingly, otherwise go get one
           always: [
-            { target: "EchoMode", guard: ({ context }) => context.targetGameMode === "Echo",},
             { target: "Multiplayer", guard: ({ context }) => context.targetGameMode === "Multiplayer", },
             { target: "Singleplayer", guard: ({ context }) => context.targetGameMode === "Singleplayer",},
             { target: "#MainMenu" },
@@ -512,7 +538,7 @@ const dmMachine = setup({
               ],
             },
             Prompt: { // Give instruction to user
-              entry: { type: "spst.speak", params: ({ context }) => ({ utterance: `Say a sentence and I will change all vowels to ${context.targetVowel}.`}),},
+              entry: { type: "vowelina.speak", params: { utterance: `Say a sentence and Mono will say it back.`}},
               on: { SPEAK_COMPLETE: "Planner" },
             },
             Planner: { // Listen if no utterance saved, otherwise redirect
@@ -522,7 +548,7 @@ const dmMachine = setup({
               ],
             },    
             Transform: { // Tranform the user utterance
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
+              entry: { type: "mono.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
               on: { SPEAK_COMPLETE: {target: "Planner", actions: { type: "clearCache" } } }
             },
           },
@@ -541,17 +567,26 @@ const dmMachine = setup({
               ],
             },
             Intro: {
-              entry: [{ type: "spst.speak", params: { utterance: `Multiplayer!!`}}, assign({roundCount: 0, team1score: 0, team2score:0})],
+              entry: [{ type: "vowelina.speak", params: { utterance: utteranceBuilder.multiplayer}}, assign({roundCount: 0, team1score: 0, team2score:0})],
               on: { SPEAK_COMPLETE: "SelectTeam" },
             },
             SelectTeam: { // Let user know which team's turn it is. Also initialize important variables
               entry: [assign({roundCount: ({ context }) => context.roundCount + 1, targetWord: ({ context }) => wordRandomizer(context.targetCategory),
-                guessCount: 0}), { type: "spst.speak", params: ({ context }) => ({
-                  utterance: `Round: ${context.roundCount}. ${context.roundCount % 2 ? "First" : "Second"} team, you are up!!` })}],
-              on: { SPEAK_COMPLETE: "WaitToStart" },
+                guessCount: 0}), { type: "vowelina.speak", params: ({ context }) => ({
+                  utterance: `Round: ${context.roundCount}. ${context.roundCount % 2 ? "First" : "Second"} team, you are up!! After the upcoming sound, the target word will unblur. Guessers, look away from the screen, until you hear me speaking again.` })}],
+              on: { SPEAK_COMPLETE: "UnblurCue" },
+            },
+            UnblurCue: { // Word unblur sound
+              invoke: {
+                src: "playUnblur",
+                onDone: { target: "Unblur" },
+              },
+            },
+            Unblur: { // waits 3 seconds
+              after: {3000: "WaitToStart"} 
             },
             WaitToStart: {
-              entry: { type: "spst.speak", params: { utterance: `Say, "Ready"!! After the beep, whisper your description!!`},},
+              entry: { type: "vowelina.speak", params: { utterance: `Say "Ready"!! Then, whisper your description to Mono!!`},},
               on: { SPEAK_COMPLETE: "#EndlessListener" },
             },
             Planner: {
@@ -562,19 +597,19 @@ const dmMachine = setup({
             },
             CheckWord: { // Check if the speaker accidentally included the target word in his utterance.
               always: [
-                {target: "RetryCue", guard: ({ context }) => containsWord(context.lastResult![0].utterance, context.targetWord), actions: assign({retryReason: "saidGuess"})},
+                {target: "GameOverCue", guard: ({ context }) => containsWord(context.lastResult![0].utterance, context.targetWord), actions: assign({retryReason: "saidGuess"})},
                 {target: "Transform"}
               ]
             },
             Transform: { // Change the vowels in the utterance
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
+              entry: { type: "mono.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
               on: { SPEAK_COMPLETE: {target: "Silencer", actions: [{ type: "clearCache" }, assign({targetGuess: ""}) ]} }
             },
             Silencer: { // Listens for silence
               initial: "Prompt",
               states: {
                 Prompt: { // Give instruction to user
-                  entry: { type: "spst.speak", params: {utterance: `You have 10 seconds for guessing. The speaker stay's silent!!`}},
+                  entry: { type: "vowelina.speak", params: {utterance: `You have 10 seconds. Silently think of a guess.`}},
                   on: { SPEAK_COMPLETE: "Listen" },
                 },
                 WaitReadyNoInput: { // Check if safe to redirect
@@ -600,7 +635,7 @@ const dmMachine = setup({
               always: [
                 { target: "#GetGuess", guard: ({ context }) => !context.targetGuess },
                 { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
-                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5 },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5, actions: assign({ retryReason: "maxGuess"})},
                 { target: "RetryCue", actions: assign({retryReason: "wrongGuess"}) },
               ],
             },
@@ -612,7 +647,7 @@ const dmMachine = setup({
             },
             RetryPrompt: {
               entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
-                { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
+                { type: "raptor.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
               ],
               on: { SPEAK_COMPLETE: {target: "WaitToStart", actions: {type: "clearCache"}} },
             },
@@ -626,7 +661,7 @@ const dmMachine = setup({
               entry: [ assign(({ context }) => context.roundCount % 2 === 1
                     ? { team2score: context.team2score + 1 }
                     : { team1score: context.team1score + 1 }),
-                { type: "spst.speak", params: { utterance: `Your guess was correct!! You win the round!!` } },],
+                { type: "raptor.speak", params: { utterance: `Your guess was correct!! You win the round!!` } },],
               on: { SPEAK_COMPLETE: "IsEndGame" },
             },
             GameOverCue: { // Play sound for game over
@@ -636,7 +671,7 @@ const dmMachine = setup({
               }
             },
             GameOver: { // Game over
-              entry: { type: "spst.speak", params: { utterance: "Game Over!! You lose the round!!" } },
+              entry: { type: "raptor.speak", params: ({context}) => ({ utterance: `Game Over!! ${utteranceBuilder.GameOver(context.retryReason)} You lose the round!!`}) },
               on: {SPEAK_COMPLETE: "IsEndGame"}
             },
             IsEndGame: { // Check if target score is reached
@@ -646,15 +681,15 @@ const dmMachine = setup({
               ]
             },
             Evaluation: { // Speak the score and loop to start
-              entry: { type: "spst.speak", params: ({ context }) => ({ utterance: context.roundCount === 1 ? "" :
+              entry: { type: "vowelina.speak", params: ({ context }) => ({ utterance: context.roundCount === 1 ? "" :
                 `Current score is: ${context.team1score} - ${context.team2score}. ${context.team1score === context.team2score ? "It is a draw!!" : 
                 `The ${context.team1score > context.team2score ? "First" : "Second"} team is leading!!`}`})},
                 on: {SPEAK_COMPLETE: "SelectTeam"}
             },
             EndGame: { // End the game
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: `${context.team1score > context.team2score 
+              entry: { type: "vowelina.speak", params: ({ context }) => ({utterance: `${context.team1score > context.team2score 
                 ? `You just scored 3 points!! Team 1 wins!!!` : `You just scored 3 points!! Team 2 wins!!!`}`,})},
-              on: { SPEAK_COMPLETE: "Setup" },
+              on: { SPEAK_COMPLETE: {target: "Setup", actions: {type: "clearCache"}}},
             },
           },
         },
@@ -673,7 +708,7 @@ const dmMachine = setup({
             },
             Intro: {
               entry: [
-                { type: "spst.speak", params: { utterance: "Singleplayer!!" } },
+                { type: "vowelina.speak", params: { utterance: utteranceBuilder.singleplayer } },
                 assign({ roundCount: 0, team1score: 0, team2score: 0 }),
               ],
               on: { SPEAK_COMPLETE: "SelectRole" },
@@ -682,7 +717,7 @@ const dmMachine = setup({
               entry: [
                 assign({ roundCount: ({ context }) => context.roundCount + 1, targetWord: ({ context }) => wordRandomizer(context.targetCategory),
                 guessCount: 0, previousDescriptions: [], previousGuesses: []}),
-                { type: "spst.speak", params: ({ context }) => ({
+                { type: "vowelina.speak", params: ({ context }) => ({
                   utterance: context.roundCount % 2 !== 0
                     ? `Round ${context.roundCount}. Your turn to describe!!`
                     : `Round ${context.roundCount}. My turn to describe!! Try to guess the word!!`,
@@ -703,12 +738,12 @@ const dmMachine = setup({
             },
             CheckPlayerWord: { // Check if the speaker accidentally included the target word in his utterance.
               always: [
-                { target: "RetryCue", guard: ({ context }) => containsWord(context.lastResult![0].utterance, context.targetWord), actions: assign({retryReason: "saidGuess"})},
+                { target: "GameOverCue", guard: ({ context }) => containsWord(context.lastResult![0].utterance, context.targetWord), actions: assign({retryReason: "saidGuess"})},
                 { target: "Transform" },
               ],
             },
             Transform: { // Change the vowels in the utterance
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
+              entry: { type: "mono.speak", params: ({ context }) => ({utterance: changeVowels(context.lastResult![0].utterance, context.targetVowel)})},
               on: { SPEAK_COMPLETE: {target: "GroqGuessing", actions: assign({targetGuess: ""}) } }
             },
             GroqGuessing: { // Tap into the LLM to decypher the message and get a guess.
@@ -729,13 +764,13 @@ const dmMachine = setup({
               },
             },
             EvaluateGroqGuess: { // Groq makes guess
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: `I think the word is... ${context.targetGuess}`,})},
+              entry: { type: "vowelina.speak", params: ({ context }) => ({utterance: `I think the word is... ${context.targetGuess}`,})},
               on: { SPEAK_COMPLETE: "CheckGroqGuess" },
             },
             CheckGroqGuess: { // Redirect based on the guess and the guess count
               always: [
                 { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
-                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5 },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5, actions: assign({ retryReason: "maxGuess"}) },
                 { target: "RetryCue", actions: assign({retryReason: "wrongGuess"}) },
               ],
             },
@@ -747,7 +782,7 @@ const dmMachine = setup({
             },
             RetryPrompt: { // Increment guess up by one, give back some feedback to user and retry
                entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
-                { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.RetryPlayer(context.retryReason)})},
+                { type: "raptor.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
               ],
               on: { SPEAK_COMPLETE: {target: "PlayerDescribes", actions: {type: "clearCache"}} },
             },
@@ -769,7 +804,7 @@ const dmMachine = setup({
               },
             },
             TransformGroq: { // Change the vowels in the utterance
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: changeVowels(context.groqDescription, context.targetVowel)})},
+              entry: { type: "mono.speak", params: ({ context }) => ({utterance: changeVowels(context.groqDescription, context.targetVowel)})},
               on: { SPEAK_COMPLETE: {target: "PlayerGuessing", actions: [{ type: "clearCache" }, assign({targetGuess: ""}) ]} }
             },
             PlayerGuessing: { // Player makes a guess
@@ -781,7 +816,7 @@ const dmMachine = setup({
             CheckPlayerGuess: { // Redirect based on the player guess
               always: [
                 { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
-                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5 },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5, actions: assign({ retryReason: "maxGuess"})},
                 { target: "RetryCueGroq" },
               ],
             },
@@ -793,7 +828,7 @@ const dmMachine = setup({
             },
             RetryGroqDescribe: { // Increment guess gount by one, give back some feedback to user and retry
               entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
-                { type: "spst.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
+                { type: "raptor.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
               ],
               on: { SPEAK_COMPLETE: {target: "GroqDescribes", actions: {type: "clearCache"}}},
             },
@@ -807,7 +842,7 @@ const dmMachine = setup({
             },
             Win: { // Increment +1 to player if player guesses or describes correctly.
               entry: [assign({ team1score: ({ context }) => context.team1score + 1 }),
-                { type: "spst.speak", params: { utterance: "Correct!! You win the round!!" } },
+                { type: "raptor.speak", params: { utterance: "Correct!! You win the round!!" } },
               ],
               on: { SPEAK_COMPLETE: "IsEndGame" },
             },
@@ -819,7 +854,7 @@ const dmMachine = setup({
             },
             GameOver: { // Increment +1 to groq if player guesse or describes incorrectly.
               entry: [assign({ team2score: ({ context }) => context.team2score + 1 }),
-                { type: "spst.speak", params: ({ context }) => ({utterance: `Game over!! The word was ${context.targetWord}!!`,})},],
+                { type: "raptor.speak", params: ({ context }) => ({utterance: `Game over!! ${utteranceBuilder.GameOver(context.retryReason)} The word was ${context.targetWord}!!`,})},],
               on: { SPEAK_COMPLETE: "IsEndGame" },
             },
             IsEndGame: { // Check if target score is reached
@@ -829,7 +864,7 @@ const dmMachine = setup({
               ]
             },
             Evaluation: { // Return some feedback to the user and start new round
-              entry: { type: "spst.speak", params: ({ context }) => ({
+              entry: { type: "vowelina.speak", params: ({ context }) => ({
                 utterance: context.roundCount === 1 ? "" :
                   `Current score — You: ${context.team1score}, Me: ${context.team2score}. ${
                     context.team1score === context.team2score ? "We are tied!!" :
@@ -839,9 +874,9 @@ const dmMachine = setup({
               on: { SPEAK_COMPLETE: "SelectRole" },
             },
             EndGame: { // End the game
-              entry: { type: "spst.speak", params: ({ context }) => ({utterance: `${context.team1score > context.team2score 
+              entry: { type: "vowelina.speak", params: ({ context }) => ({utterance: `${context.team1score > context.team2score 
                 ? "You just scored 3 points!! You win!!!" : "I just scored 3 points!! I win!!!"}`,})},
-              on: { SPEAK_COMPLETE: "Setup" },
+              on: { SPEAK_COMPLETE: {target: "Setup", actions: {type: "clearCache"}}},
             },
           },
         },

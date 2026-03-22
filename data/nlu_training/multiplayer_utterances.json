@@ -1,0 +1,49 @@
+[
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "I want multiplayer", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "start multiplayer", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "play multiplayer", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "choose multiplayer", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "multiplayer mode please", "entities": [] },
+
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "I want to play with friends", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "let's play with friends", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we are playing with friends", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "play with a group", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "play with other people", "entities": [] },
+
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we want a group game", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "everyone wants to play", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we are all playing", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we want to play as a group", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "all of us want to play", "entities": [] },
+
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "team mode", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "start team mode", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "play in teams", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "I want team mode", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "split into teams", "entities": [] },
+
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "create teams", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "form teams", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we want teams", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we will play in teams", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "team versus team", "entities": [] },
+
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we want to compete", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we will compete", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we want a competitive game", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we play against each other", "entities": [] },
+
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "I want multiple players", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "more than one player", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "several players", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "group of players", "entities": [] },
+
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "I want pvp", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "start pvp", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "pvp mode please", "entities": [] },
+
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "no solo we want teams", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "not solo multiplayer", "entities": [] },
+{ "intent": "ChooseMultiplayer", "language": "en-us", "text": "we want multiplayer only", "entities": [] }
+]

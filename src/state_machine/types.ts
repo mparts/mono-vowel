@@ -25,6 +25,7 @@ interface NLUObject {
 // == Machine context and events exports ================================================================================
 export interface DMContext {
   spstRef: ActorRef<any, any>;
+  jennyRef: ActorRef<any, any>;
   silencerRef: ActorRef<any, any>;
   lastResult: Hypothesis[] | null;
   interpretation: NLUObject | null;

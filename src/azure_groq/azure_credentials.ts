@@ -22,7 +22,7 @@ export const settings: Settings = {
   asrDefaultCompleteTimeout: 0,
   asrDefaultNoInputTimeout: 5000,
   locale: "en-US",
-  ttsDefaultVoice: "en-US-DavisNeural",
+  ttsDefaultVoice: "en-US-GuyNeural",
 };
 /** Settings for the listener of Silence */
 export const settingsSilencer: Settings = {
@@ -33,4 +33,14 @@ export const settingsSilencer: Settings = {
   asrDefaultNoInputTimeout: 10000,
   locale: "en-US",
   ttsDefaultVoice: "en-US-DavisNeural",
+};
+/** Settings for the narrator */
+export const settingsJenny: Settings = {
+  azureCredentials,
+  azureLanguageCredentials,
+  azureRegion: "swedencentral",
+  asrDefaultCompleteTimeout: 0,
+  asrDefaultNoInputTimeout: 5000,
+  locale: "en-US",
+  ttsDefaultVoice: "en-US-JennyNeural",
 };

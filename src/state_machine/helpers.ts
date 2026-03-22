@@ -121,7 +121,7 @@ export function extractVowel(result: string): string | null {
   return null;
 }
 /** Replaces all vowels in a text with the given vowel. Numbers are first expanded to words. */
-export function changeVowels(text: string, vowel: string = "i"): string {
+export function changeVowels(text: string, vowel: string = "o"): string {
   const expanded = text.replace(/\d+(\.\d+)?/g, (match) => {
     if (match.includes(".")) {
       const [integer, decimal] = match.split(".");

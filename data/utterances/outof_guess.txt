@@ -1,0 +1,20 @@
+You’re out of guesses.
+No guesses left.
+You’ve used all your guesses.
+You’re out.
+No more guesses.
+You’re done guessing.
+That was your last one.
+You’ve run out.
+You’re out of tries.
+No tries left.
+You’ve spent all guesses.
+You’re out of attempts.
+No attempts left.
+You’ve hit zero guesses.
+You’re out of chances.
+No chances left.
+You’ve exhausted your guesses.
+You can’t guess anymore. Out of retries.
+You’re completely out of guesses.
+That was your final guess.

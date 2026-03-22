@@ -1,0 +1,47 @@
+[
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want singleplayer", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "start singleplayer", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "play singleplayer", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "choose singleplayer", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "singleplayer mode please", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want to play alone", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "let me play alone", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I will play alone", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I prefer playing alone", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want to play by myself", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "just me playing", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "only me playing", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "solo mode", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "start solo mode", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "play solo", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want solo mode", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "one player mode", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "just one player", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "only one player", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want to play with Vowelina", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "let me play with Vowelina", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want Vowelina as my opponent", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "just me and Vowelina", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want to play with you", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "you and me let's play", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want to play against you", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "just me and you", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want the AI to play with me", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "play against the computer", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I want an AI opponent", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "I don’t want multiplayer", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "skip multiplayer", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "no teams just me", "entities": [] },
+
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "just a solo game", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "give me a solo game", "entities": [] },
+{ "intent": "ChooseSinglePlayer", "language": "en-us", "text": "start a solo game", "entities": [] }
+]

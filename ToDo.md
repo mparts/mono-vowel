@@ -15,6 +15,12 @@
 
 # fixes
 
-- go through training NLU, refractor EVERYTHING (REMOVE ECHO from INTENTS, and place it as the default - Demo version)
+- improve nlu
 - go through random utterances, trim irrelevant. FIX ASAP!! Important!!
 - multiplayer feels clanky, trim utterances, move tips to HUD (same for singleplayer)
+
+# random utterance fix
+
+- add thanks for playing random utterances.
+- try to slightly randomize the greeting
+- try to randomize the echo prompt
