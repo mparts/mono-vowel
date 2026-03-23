@@ -66,9 +66,6 @@ export function Retry(reason: string): string {
   if (reason === "wrongGuess") {
     return wrong_guess[Math.floor(Math.random() * wrong_guess.length)];
   }
-  if (reason === "brokeSilence") {
-    return made_sound[Math.floor(Math.random() * made_sound.length)];
-  }
 return "Try describing again!!"
 }
 /** Returns an utterance, depending on what the reason of loosing a guess was. */
@@ -79,19 +76,22 @@ export function GameOver(reason: string): string {
   if (reason === "saidGuess") {
     return spoke_target[Math.floor(Math.random() * spoke_target.length)];
   }
-return "Try describing again!!"
+  if (reason === "brokeSilence") {
+    return made_sound[Math.floor(Math.random() * made_sound.length)];
+  }
+return "GameOver!!"
 }
 
 // == Greeting Builder ==============================================================================================================================
-export const vowelina_intro = "Oh, Hahah... hello there!! I dozed off a little bit, and I didn't hear you approach.. Well, I am Vowelina!! And the fella next to me is my younger brother, Mono. Since birth, Mono has had some slight trouble with speaking, and sadly most people cannot really understand him, so we've always been travelling together!!";
+export const vowelina_intro = "Oh, Hello there!! I dozed off a little bit, and I didn't hear you approach.. Well, I am Vowelina!! And the fella next to me is my younger brother, Mono. Since birth, Mono has had some slight trouble with speaking, and sadly most people cannot really understand him, so we've always been travelling together!!";
 export const mono1 = "Hello there!! I am Mono!! ";
 export const mono2 = "I can do all vowels!! And I understand speech, just as well as the next person!! ";
 export const mono3 = "But I can only do one vowel at a time.. ";
 export const vowelina_mono = "Well.. that's Mono!! As he said, all vowels, but only one at a time.. Most people would consider this a disability.. but we've turned this quirk of his into the best game ever!! What do you say we...";
 export const vowelina_raptor ="Ahh yes... Raptor!! He always jokes arround, telling people that he is a god and can alter time and space!! What a jester!! What he is actually really usefull for, is helping us play our games!!";
-export const raptor_intro = `I am. Inter.Raptor!! Poor Vowelina and Mono. They think they are real human beings like you.. they don't realize they are nothing more than ssml sequences.. They, also think. that I am joking.. But I can indeed. Alter time!! I am a god afterall.. Whenever, you. feel like, it. Say one, of the Global. Commands. And I, will, take, over!! Also, I will be. Giving you tips, through the. HUD.`
-export const vowelina_outro = "Mono have came up with two game modes, multiplayer pvp and singleplayer pve. If you are at least 4 people, you could play against each other!! Otherwise, we can always just play together!! But first, go ahead and conversate with Mono, see what all of this is about!!";
+export const raptor_intro = `I am. Inter.Raptor!! Poor Vowelina and Mono. They think they are real human beings like you.. they don't realize they are nothing more than ssml sequences.. They, also think. that I am joking.. But I can indeed. Alter time!! I am a god afterall.. Whenever, you feel like it. Say one, of the Global Commands. And I, will, take, over!! Also, I will be giving you tips, through the HUD.`
+export const vowelina_outro = "Mono have came up with two game modes, multiplayer pvp and singleplayer pve. If you are at least 4 people, you could play multiplayer against each other!! Otherwise, we can always just play together!! But first, go ahead and conversate with Mono, see what all of this is about!!";
 
 // == Game modes Intos ==============================================================================================================================
-export const multiplayer = `Multiplayer!! Begin by forming two teams. At the beginning of each round, Raptor is going to pick a random word. The leader of the team, whispers a description of the word to Mono. Then, the rest of the team has 10 seconds to decypher what Mono said, and provide a guess. Each team, has 5 retries. The leader must not include the word in their description, and must not communicate with their team, via any means. First team to correctly guess three times is the winner.`
-export const singleplayer = "Singleplayer!! At the beginning of each round, Raptor is going to pick a random word for us. We take turns into describing and guessing. There are 5 retries available each round. You get a point when you or I guess correctly. I get a point when you or I am out of retries. First one to reach 3 points wins. You must not use the target word, in your description."
+export const multiplayer = `Multiplayer!! Begin by forming two teams. Each round, Raptor picks a random word. The leader of the team, whispers a description of the word to Mono. Then, the rest of the team has 10 seconds to decypher what Mono said, and then provide a guess. Each team, has 5 retries. If the leader includes the word in their description, or verbally communicates with their team, results in GAME OVER. Signs and gestures are allowed. First team to correctly guess three times is the winner.`
+export const singleplayer = "Singleplayer!! At the beginning of each round, Raptor is going to pick a random word for us. We take turns into describing and guessing. There are 5 retries available each round. You get a point when you or I guess correctly. I get a point when you or I am out of retries. First one to reach 3 points wins. You must not use the target word in your description."

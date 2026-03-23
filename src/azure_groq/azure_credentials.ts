@@ -2,10 +2,21 @@ import type { Settings } from "speechstate";
 import  {SPEECH_KEY, NLU_KEY} from "./secrets";
 
 // == Azure Related Credentials =====================================================================================================================
+// Sweden
+// const azureCredentials = {
+//   endpoint: "https://swedencentral.api.cognitive.microsoft.com/sts/v1.0/issuetoken",
+//   key: SPEECH_KEY,
+// };
+// const azure_region = "swedencentral"
+
+// Germany
 const azureCredentials = {
-  endpoint: "https://swedencentral.api.cognitive.microsoft.com/sts/v1.0/issuetoken",
+  endpoint: "https://germanywestcentral.api.cognitive.microsoft.com/sts/v1.0/issuetoken",
   key: SPEECH_KEY,
 };
+const azure_region = "germanywestcentral"
+
+
 const azureLanguageCredentials = {
   endpoint: "https://ds2026-gusbaranj.cognitiveservices.azure.com/language/:analyze-conversations?api-version=2024-11-15-preview",
   key: NLU_KEY,
@@ -18,7 +29,7 @@ const azureLanguageCredentials = {
 export const settings: Settings = {
   azureCredentials,
   azureLanguageCredentials,
-  azureRegion: "swedencentral",
+  azureRegion: azure_region,
   asrDefaultCompleteTimeout: 0,
   asrDefaultNoInputTimeout: 5000,
   locale: "en-US",
@@ -28,7 +39,7 @@ export const settings: Settings = {
 export const settingsSilencer: Settings = {
   azureCredentials,
   azureLanguageCredentials,
-  azureRegion: "swedencentral",
+  azureRegion: azure_region,
   asrDefaultCompleteTimeout: 0,
   asrDefaultNoInputTimeout: 10000,
   locale: "en-US",
@@ -38,7 +49,7 @@ export const settingsSilencer: Settings = {
 export const settingsJenny: Settings = {
   azureCredentials,
   azureLanguageCredentials,
-  azureRegion: "swedencentral",
+  azureRegion: azure_region,
   asrDefaultCompleteTimeout: 0,
   asrDefaultNoInputTimeout: 5000,
   locale: "en-US",
