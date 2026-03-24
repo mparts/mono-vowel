@@ -8,7 +8,7 @@ import readySound from "../sounds/ready.mp3";
 
 // == NLU helpers ===================================================================================================================================
 /** Returns the top NLU intent if its confidence meets the threshold, or has more than 15% difference with the next one, otherwise undefined. */
-export function getTopIntent(context: DMContext, threshold = 0.7, minGap = 0.15): string | undefined {
+export function getTopIntent(context: DMContext, threshold = 0.8, minGap = 0.30): string | undefined {
   const intents = context.interpretation?.intents;
   console.log("INTENTS:", JSON.stringify(intents, null, 2), {threshold, minGap});
   if (!intents || intents.length === 0) return undefined;
@@ -88,7 +88,7 @@ export function extractCategory(result: string): string | null {
   }
   return "";
 }
-/** Maps a user utterance to a vowel letter. Handles homophones and common mishearings (e.g. "eye" → "i", "oh" → "o"). */
+/** Maps a user utterance to a vowel letter. Handles some common mishearings (e.g. "eye" → "i", "oh" → "o"). */
 export function extractVowel(result: string): string | null {
   const normalized = result.trim().toLowerCase();
   // 1. Direct single-letter vowel

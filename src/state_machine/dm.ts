@@ -313,7 +313,7 @@ const dmMachine = setup({
             Retry: { // If confirmation was negative, restart the Getter
               entry: assign({ temp: "" }),
               always: [
-                {target: "CheckExistence", actions: {type: "clearContext"}, guard: ({ context }) => context.target === "Init",},        
+                {target: "CheckExistence", actions: [{type: "clearContext"}, assign({target: "Init"})], guard: ({ context }) => context.target === "Init",},        
                 {target: "CheckExistence", actions: assign({ targetGameMode: "" }), guard: ({ context }) => context.target === "game mode",},                
                 {target: "CheckExistence", actions: assign({ targetVowel: "" }), guard: ({ context }) => context.target === "vowel",},
                 {target: "CheckExistence", actions: assign({ targetCategory: "" }), guard: ({ context }) => context.target === "word category",},
