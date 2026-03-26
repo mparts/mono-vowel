@@ -51,14 +51,17 @@ You will need a `secrets.ts` file with your Azure and Groq API keys — see `azu
 
 ## Challenges during development
 
-**NLU**
-I had extreme difficulties with training the NLU to not return the pronoun "I" as a vowel. The bug was that every utterance like this: "I would like to choose the vowel a", would always return "i" as the vowel/top entity. I tried various fixes, creating extra intents, better training etc.. But I ended up just removing the vowel "i" from the NLU and just hardcoding it. It works surprisingly well.
+- **NLU**:
 
-**ASR**
-Because of my accent, but also because of the lack of context when I am asking for a guess (I prompt the user to only say ONE word as their guess), ASR fails to get certain words. Some problematic words were removed from the pool, but the problem persists, mostly because of certain accents, like mine.
+  I had extreme difficulties with training the NLU to not return the pronoun "I" as a vowel. The bug was that every utterance like this: "I would like to choose the vowel a", would always return "i" as the vowel/top entity. I tried various fixes, creating extra intents, better training etc.. But I ended up just removing the vowel "i" from the NLU and just hardcoding it. It works surprisingly well.
 
-**Error 429 / Azure**
-The day before the presentation, I got locked out / reached the limit in one of my speech resources, so I had to create a new one. I think this was because I am using three different voices, so I kinda inflicted this upon myself (I hope something like this doesn't happen during your grading.).
+- **ASR**:
+
+  Because of my accent, but also because of the lack of context when I am asking for a guess (I prompt the user to only say ONE word as their guess), ASR fails to get certain words. Some problematic words were removed from the pool, but the problem persists, mostly because of certain accents, like mine.
+
+- **Error 429 / Azure**:
+
+  The day before the presentation, I got locked out / reached the limit in one of my speech resources, so I had to create a new one. I think this was because I am using three different voices, so I kinda inflicted this upon myself (I hope something like this doesn't happen during your grading.).
 
 ## Development Process
 
