@@ -781,7 +781,7 @@ const dmMachine = setup({
             CheckGroqGuess: { // Redirect based on the guess and the guess count
               always: [
                 { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
-                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 5, actions: assign({ retryReason: "maxGuess"}) },
+                { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 4, actions: assign({ retryReason: "maxGuess"}) },
                 { target: "RetryCue", actions: assign({retryReason: "wrongGuess"}) },
               ],
             },
