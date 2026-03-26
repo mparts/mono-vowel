@@ -1,14 +1,14 @@
 # Mono-Vowel
 
-A voice-driven word-guessing game built as a final project for the Dialogue Systems I course (LT2216). Players describe and guess words through speech, but with a twist: all vowels in every description get replaced by a single chosen vowel, making descriptions deliberately hard to understand.
+A voice-driven word-guessing game built as a final project for the Dialogue Systems 1 course (LT2216). Players describe and guess words through speech, but with a twist: all vowels in every description get replaced by a single chosen vowel, making descriptions deliberately hard to understand.
 
 ## Characters
 
 These three TTS voices were used:
 
-- **Vowelina** => the narrator. Introduces the game, announces rounds, reads scores.
-- **Mono** => repeats all descriptions with vowel-transformed speech.
-- **Raptor** => handles system prompts, confirmations, round results, and tips.
+- **Vowelina** => the narrator. Introduces the game, announces rounds, reads scores. (en-US-JennyNeural)
+- **Mono** => repeats all descriptions with vowel-transformed speech. (en-US-GuyNeural)
+- **Raptor** => handles system prompts, confirmations, round results, and tips. (en-US-DavisNeural)
 
 ## Game Modes
 
