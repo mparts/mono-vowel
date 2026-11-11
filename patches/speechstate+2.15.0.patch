@@ -13,3 +13,19 @@ index 21390a1..000ff39 100644
              console.debug("[ASR] READY", recognition);
              sendBack({ type: "READY", value: recognition });
              receive((event) => {
+diff --git a/node_modules/speechstate/dist/tts.js b/node_modules/speechstate/dist/tts.js
+index b2a24e8..9719133 100644
+--- a/node_modules/speechstate/dist/tts.js
++++ b/node_modules/speechstate/dist/tts.js
+@@ -190,6 +190,11 @@ exports.ttsMachine = (0, xstate_1.setup)({
+                     sendBack({ type: "SPEAK_COMPLETE" });
+                     console.debug("[TTS] SPEAK_COMPLETE");
+                 };
++                // A failed synthesis (bad SSML, network, token) fires "error" but no "end"
++                utterance.onerror = (e) => {
++                    console.error("[TTS] synthesis failed", e);
++                    sendBack({ type: "SPEAK_COMPLETE" });
++                };
+                 // if (input.visemes) {
+                 //   (utterance as any).onviseme = (event) => {
+                 //     sendBack({

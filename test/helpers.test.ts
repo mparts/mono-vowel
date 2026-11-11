@@ -9,6 +9,7 @@ import {
   changeVowels,
   extractGuess,
   containsWord,
+  escapeSsml,
 } from "../src/state_machine/helpers";
 
 // == Fixtures ======================================================================================================================================
@@ -158,6 +159,18 @@ describe("extractGuess", () => {
     expect(extractGuess("a cat")).toBeNull();
     expect(extractGuess("")).toBeNull();
     expect(extractGuess("   ")).toBeNull();
+  });
+});
+
+describe("escapeSsml", () => {
+  test("escapes & < > so text from the ASR or Groq can't break the SSML", () => {
+    expect(escapeSsml("Tom & Jerry <3 > 2")).toBe("Tom &amp; Jerry &lt;3 &gt; 2");
+  });
+  test("escapes & only once", () => {
+    expect(escapeSsml("&")).toBe("&amp;");
+  });
+  test("leaves plain text alone", () => {
+    expect(escapeSsml("Hollo world, it's \"fun\"!!")).toBe("Hollo world, it's \"fun\"!!");
   });
 });
 

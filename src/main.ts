@@ -134,6 +134,7 @@ const VOWELINA_STATES = [
   "VowelinaIntro", "VowelinaMono", "VowelinaRaptor", "VowelinaOutro", "EchoMode.Prompt", "Core.Done.Vowelina",
   "Multiplayer.Intro", "Multiplayer.SelectTeam", "Multiplayer.WaitToStart", "Multiplayer.Silencer.Prompt", "Multiplayer.Evaluation", "Multiplayer.EndGame",
   "Singleplayer.Intro", "Singleplayer.SelectRole", "Singleplayer.Evaluation", "Singleplayer.EvaluateGroqGuess", "Singleplayer.EndGame",
+  "Singleplayer.GroqGuessFailed", "Singleplayer.GroqDescribeFailed",
 ];
 const MONO_STATES = [
   "MonoIntro", "Singleplayer.Transform", "Multiplayer.Transform", "TransformGroq", "EchoMode.Transform", "Core.Done.Mono",
@@ -171,6 +172,8 @@ function getBubbleText(statePath: string, speaker: Speaker): string {
     if (statePath.includes("SelectTeam"))        return "○ announcing next team…";
     if (statePath.includes("SelectRole"))        return "○ announcing next role…";
     if (statePath.includes("EvaluateGroqGuess")) return "○ making a guess…";
+    if (statePath.includes("GroqGuessFailed"))   return "○ passing…";
+    if (statePath.includes("GroqDescribeFailed")) return "○ skipping the round…";
     if (statePath.includes("Evaluation"))        return "○ reading the score…";
     if (statePath.includes("EndGame"))           return "○ announcing the winner…";
     if (statePath.includes("WaitToStart"))       return "○ giving instructions…";
@@ -315,6 +318,9 @@ interface UISignals {
   raptorContent: string;
 }
 
+// Set when speech or the mic fails at startup (see "Boot errors" below); overrides the status strip.
+let bootError: string | null = null;
+
 function deriveSignals(snapshot: ReturnType<typeof dmActor.getSnapshot>): UISignals {
   const ctx = snapshot.context;
   const statePath = flattenState(snapshot.value);
@@ -392,7 +398,8 @@ function deriveSignals(snapshot: ReturnType<typeof dmActor.getSnapshot>): UISign
 
   // == Status Text ===================================================================================================
   const statusText =
-    isUnblurState         ? "LOOK NOW — word visible for 3 seconds "
+    bootError             ? bootError
+    : isUnblurState       ? "LOOK NOW — word visible for 3 seconds "
     : isSilencer          ? "SILENCE"
     : isWin               ? "CORRECT GUESS — round won"
     : isGameOver          ? "ROUND LOST"
@@ -435,12 +442,12 @@ function deriveSignals(snapshot: ReturnType<typeof dmActor.getSnapshot>): UISign
     guessCount,
     isUnblurState,
     isSilencerListen,
-    dotClass: isSilencer   ? "danger"
+    dotClass: bootError || isSilencer ? "danger"
       : isListening ? "listening"
       : isSpeaking  ? "speaking"
       : "idle",
     statusText,
-    statusHot: isSilencer || isWin || isGameOver || isUnblurState || isConfirmingGuess || isPlayerDescribeTurn,
+    statusHot: !!bootError || isSilencer || isWin || isGameOver || isUnblurState || isConfirmingGuess || isPlayerDescribeTurn,
     statePath,
     bodyClass: isSilencer     ? "state-silence"
       : isWin          ? "state-win"
@@ -551,3 +558,23 @@ function applySignals(s: UISignals) {
 dmActor.subscribe((snapshot) => {
   applySignals(deriveSignals(snapshot));
 });
+
+// == Boot errors ===================================================================================================================================
+// A speech actor that fails to start (e.g. the Azure token) only goes to its own "error" view and never tells the
+// state machine, so the HUD watches the three actors itself. The first error stays on screen.
+function showBootError(message: string) {
+  if (bootError) return;
+  bootError = message;
+  applySignals(deriveSignals(dmActor.getSnapshot()));
+}
+const isErrorView = (snapshot: any) =>
+  Object.values(snapshot.getMeta() as Record<string, { view?: string }>).some((m) => m?.view === "error");
+const { spstRef, jennyRef, silencerRef } = dmActor.getSnapshot().context;
+const SPEECH_FAILED = "Speech failed to start: check the Azure key and network, then reload";
+for (const ref of [spstRef, jennyRef, silencerRef]) {
+  if (isErrorView(ref.getSnapshot())) showBootError(SPEECH_FAILED);
+  ref.subscribe((snapshot: any) => { if (isErrorView(snapshot)) showBootError(SPEECH_FAILED); });
+}
+navigator.mediaDevices?.getUserMedia({ audio: true })
+  .then((stream) => stream.getTracks().forEach((track) => track.stop()))
+  .catch(() => showBootError("Microphone blocked: allow it and reload"));

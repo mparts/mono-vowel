@@ -31,6 +31,7 @@ export interface DMContext {
   interpretation: NLUObject | null;
   confirm: boolean;
   currentListener: string;
+  readyCount: number;
   roundCount: number;
   targetGuess: string;
   targetWord: string;

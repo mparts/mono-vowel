@@ -5,7 +5,7 @@ import { settings, settingsJenny, settingsSilencer } from "../azure_groq/azure_c
 import { askGroq } from "../azure_groq/groq";
 import { getTopIntent, getEntity, getEntityResolution, containsWord} from "./helpers"; // NLU helpers
 import { extractCategory, extractVowel, changeVowels, extractGuess} from "./helpers"; // Game helpers
-import { isGlobalCommand, wordRandomizer, playReady} from "./helpers"; // General helpers
+import { isGlobalCommand, wordRandomizer, playReady, escapeSsml} from "./helpers"; // General helpers
 import * as utteranceBuilder from "./utterance_builders"; // Utterance builders
 // Sound effects imports
 import buzzerSound from "../sounds/buzzer.mp3";
@@ -20,13 +20,13 @@ const dmMachine = setup({
     events: {} as DMEvents,
   },
   actions: {
-    // Standard speak and listen.
-    "mono.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
-      context.spstRef.send({ type: "SPEAK",value: { utterance: `<prosody rate="-20.00%">${params.utterance}</prosody>` }});},
-    "vowelina.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
-      context.jennyRef.send({ type: "SPEAK",value: { utterance: params.utterance }});},
-    "raptor.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance); 
-      context.silencerRef.send({ type: "SPEAK",value: { utterance: `<prosody rate="-20.00%" pitch="-20.00%">${params.utterance}</prosody>` }});},
+    // Standard speak and listen. Text is escaped, since speechstate puts it into SSML as is.
+    "mono.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance);
+      context.spstRef.send({ type: "SPEAK",value: { utterance: `<prosody rate="-20.00%">${escapeSsml(params.utterance)}</prosody>` }});},
+    "vowelina.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance);
+      context.jennyRef.send({ type: "SPEAK",value: { utterance: escapeSsml(params.utterance) }});},
+    "raptor.speak": ({ context }, params: { utterance: string }) => {console.log("SPEAKING:", params.utterance);
+      context.silencerRef.send({ type: "SPEAK",value: { utterance: `<prosody rate="-20.00%" pitch="-20.00%">${escapeSsml(params.utterance)}</prosody>` }});},
     "spst.listen": ({ context }) => context.spstRef.send({ type: "LISTEN", value: { nlu: true }}),
     // Silencer listen and cancel.
     "silencer.listen": ({ context }) => context.silencerRef.send({ type: "LISTEN", value: { nlu: true }}),
@@ -95,7 +95,7 @@ const dmMachine = setup({
     roundCount: 0, targetGuess: "", guessCount: 0, team1score: 0, team2score: 0, groqDescription: "", retryReason: "",
     previousDescriptions: [],
     previousGuesses: [],
-    confirm: false, currentListener: "",
+    confirm: false, currentListener: "", readyCount: 0,
     lastCommand: null as string | null, lastResult: null, interpretation: null,
     spstRef: spawn(speechstate, { input: settings }),
     silencerRef: spawn(speechstate, { input: settingsSilencer }),
@@ -114,13 +114,16 @@ const dmMachine = setup({
           id: "Boot",
           initial: "Prepare",
           states: {
-            Prepare: { 
+            Prepare: { // Wait until all three speech actors are ready
               entry: [
                 ({ context }) => context.spstRef.send({ type: "PREPARE" }),
                 ({ context }) => context.jennyRef.send({ type: "PREPARE" }),
                 ({ context }) => context.silencerRef.send({ type: "PREPARE" }),
               ],
-              on: { ASRTTS_READY: "WaitForClick" },
+              on: { ASRTTS_READY: [
+                { target: "WaitForClick", guard: ({ context }) => context.readyCount + 1 >= 3 },
+                { actions: assign({ readyCount: ({ context }) => context.readyCount + 1 }) },
+              ]},
             },
             WaitForClick: {
               on: { CLICK: "#EndlessListener" },
@@ -772,7 +775,12 @@ const dmMachine = setup({
                   actions: assign({ targetGuess: ({ event }) => event.output.trim().toLowerCase(),
                   previousGuesses: ({ context, event }) => [...context.previousGuesses, event.output.trim()],}),
                 },
+                onError: { target: "GroqGuessFailed", actions: ({ event }) => console.error("[Groq]", event.error) },
               },
+            },
+            GroqGuessFailed: { // Groq failed: Vowelina passes, which counts as a wrong guess
+              entry: { type: "vowelina.speak", params: { utterance: "Hmm, my mind went blank... I pass!!" } },
+              on: { SPEAK_COMPLETE: "CheckGroqGuess" },
             },
             EvaluateGroqGuess: { // Groq makes guess
               entry: { type: "vowelina.speak", params: ({ context }) => ({utterance: `I think the word is... ${context.targetGuess}`,})},
@@ -809,10 +817,15 @@ const dmMachine = setup({
                 }),
                 onDone: {
                   target: "TransformGroq",
-                  actions: assign({ groqDescription: ({ event }) => event.output.trim(), 
+                  actions: assign({ groqDescription: ({ event }) => event.output.trim(),
                   previousDescriptions: ({ context, event }) => [...context.previousDescriptions, event.output.trim()],}),
                 },
+                onError: { target: "GroqDescribeFailed", actions: ({ event }) => console.error("[Groq]", event.error) },
               },
+            },
+            GroqDescribeFailed: { // Groq failed: skip the round, no score change
+              entry: { type: "vowelina.speak", params: { utterance: "Oops, Mono lost his words. Let's skip this one!!" } },
+              on: { SPEAK_COMPLETE: "Evaluation" },
             },
             TransformGroq: { // Change the vowels in the utterance
               entry: { type: "mono.speak", params: ({ context }) => ({utterance: changeVowels(context.groqDescription, context.targetVowel)})},

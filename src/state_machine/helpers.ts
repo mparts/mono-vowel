@@ -133,6 +133,10 @@ export function changeVowels(text: string, vowel: string = "o"): string {
     m === m.toUpperCase() ? vowel.toUpperCase() : vowel
   );
 }
+/** Escapes the characters that would break the SSML speechstate wraps around spoken text. */
+export function escapeSsml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 /** Returns the utterance as a guess, only if it is exactly one word, otherwise null. */
 export function extractGuess(result: string): string | null {
   const normalized = result.trim();
