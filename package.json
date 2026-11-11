@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build --base ./",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc"
   },
   "devDependencies": {
     "@types/number-to-words": "^1.2.3",
     "typescript": "~5.9.3",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "vitest": "^5.1.0"
   },
   "dependencies": {
     "number-to-words": "^1.2.4",
