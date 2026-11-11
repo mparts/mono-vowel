@@ -142,7 +142,7 @@ const MONO_STATES = [
 const RAPTOR_STATES = [
   "Boot.Greeting.Raptor", "RaptorIntro",
   "Core.Done.Raptor", "DefaultSettings", "ResetSettings",
-  "Listener.NoInput", "Getter.Prompt", "Getter.ConfirmPrompt", "Getter.ConfirmPlanner", "Getter.FallbackError",
+  "Listener.NoInput", "Getter.Prompt", "Getter.ConfirmPrompt", "Getter.ConfirmPlanner", "Getter.YesNoReminder", "Getter.FallbackError",
   "Multiplayer.Win", "Multiplayer.GameOver", "Multiplayer.RetryPrompt",
   "Singleplayer.Win", "Singleplayer.GameOver", "Singleplayer.RetryPrompt", "Singleplayer.RetryGroqDescribe",
 ];
@@ -187,6 +187,7 @@ function getBubbleText(statePath: string, speaker: Speaker): string {
     if (statePath.includes("ResetSettings"))   return "○ settings reset";
     if (statePath.includes("NoInput"))         return "○ make sure your mic is unmuted.. or speak louder";
     if (statePath.includes("ConfirmPrompt"))   return "○ asking for confirmation…";
+    if (statePath.includes("YesNoReminder"))   return "○ asking for yes or no…";
     if (statePath.includes("Getter.Prompt"))   return "○ asking for input…";
     if (statePath.includes("FallbackError"))   return "○ didn't understand…";
     if (statePath.includes("Win"))             return "○ correct guess!!";

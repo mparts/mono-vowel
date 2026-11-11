@@ -10,6 +10,8 @@ import {
   extractGuess,
   containsWord,
   escapeSsml,
+  cleanGuess,
+  heardCommand,
 } from "../src/state_machine/helpers";
 
 // == Fixtures ======================================================================================================================================
@@ -17,6 +19,10 @@ type TestIntent = { category: string; confidenceScore: number };
 /** Builds a context holding only an NLU result with the given intents and entities. */
 function nlu(intents: TestIntent[], entities: object[] = []): DMContext {
   return { interpretation: { intents, entities } } as unknown as DMContext;
+}
+/** Builds a context holding only an ASR result with the given utterance, or none. */
+function heard(utterance: string | null): DMContext {
+  return { lastResult: utterance === null ? null : [{ utterance, confidence: 1 }] } as unknown as DMContext;
 }
 /** Builds a yes/no-style entity with optional resolutions and ListKey. */
 function entity(category: string, opts: { text?: string; resolutions?: any[]; listKey?: string } = {}) {
@@ -102,8 +108,8 @@ describe("extractCategory", () => {
       expect(CATEGORIES).toContain(extractCategory(phrase));
     }
   });
-  test("returns an empty value when nothing matches", () => {
-    expect(extractCategory("hello there")).toBeFalsy();
+  test("returns null when nothing matches, so ?? keeps an earlier category (B5)", () => {
+    expect(extractCategory("hello there")).toBeNull();
   });
 });
 
@@ -162,6 +168,14 @@ describe("extractGuess", () => {
   });
 });
 
+describe("cleanGuess", () => {
+  test("strips punctuation and markdown from an LLM guess (B4)", () => {
+    expect(cleanGuess("Cat.")).toBe("cat");
+    expect(cleanGuess("**cat**")).toBe("cat");
+    expect(cleanGuess(' "Cat"\n')).toBe("cat");
+  });
+});
+
 describe("escapeSsml", () => {
   test("escapes & < > so text from the ASR or Groq can't break the SSML", () => {
     expect(escapeSsml("Tom & Jerry <3 > 2")).toBe("Tom &amp; Jerry &lt;3 &gt; 2");
@@ -186,5 +200,17 @@ describe("containsWord", () => {
   test("returns false for empty input", () => {
     expect(containsWord("", "cat")).toBe(false);
     expect(containsWord("cat", "")).toBe(false);
+  });
+});
+
+describe("heardCommand", () => {
+  test("matches a command in any case, with punctuation or extra words (B11)", () => {
+    expect(heardCommand(heard("Ready!"), "ready")).toBe(true);
+    expect(heardCommand(heard("wake up please"), "wake up")).toBe(true);
+    expect(heardCommand(heard("Wake Up"), "wake up")).toBe(true);
+  });
+  test("ignores partial words and a missing result", () => {
+    expect(heardCommand(heard("already"), "ready")).toBe(false);
+    expect(heardCommand(heard(null), "ready")).toBe(false);
   });
 });

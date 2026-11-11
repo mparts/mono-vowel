@@ -58,7 +58,7 @@ export function getEntityResolution(context: DMContext, category: string): any |
 }
 
 // == GAME helpers ==================================================================================================================================
-/** Maps a user utterance to one of the word categories. Handles synonyms and "random"-style phrases. Returns "" if no match. */
+/** Maps a user utterance to one of the word categories. Handles synonyms and "random"-style phrases. Returns null if no match. */
 export function extractCategory(result: string): string | null {
   const normalized = result.trim().toLowerCase();
   // Exact Categories match
@@ -86,7 +86,7 @@ export function extractCategory(result: string): string | null {
     const index = Math.floor(Math.random() * categories.length);
     return categories[index];
   }
-  return "";
+  return null;
 }
 /** Maps a user utterance to a vowel letter. Handles some common mishearings (e.g. "eye" → "i", "oh" → "o"). */
 export function extractVowel(result: string): string | null {
@@ -146,6 +146,10 @@ export function extractGuess(result: string): string | null {
   }
   return null;
 }
+/** Cleans an LLM guess for comparison: lowercase letters and single spaces only (e.g. "**Cat.**" → "cat"). */
+export function cleanGuess(text: string): string {
+  return text.toLowerCase().replace(/[^a-z\s]/g, "").replace(/\s+/g, " ").trim();
+}
 
 // == General helpers ===============================================================================================================================
 const GLOBAL_COMMANDS = ["exit", "restart", "reset", "default", "reset vowel", "reset mode", "reset category", ];
@@ -172,6 +176,10 @@ export function containsWord(text: string, word: string): boolean {
   if (!text || !word) return false;
   const pattern = new RegExp(`\\b${word}\\b`, "i");
   return pattern.test(text);
+}
+/** Checks if the last utterance contains a command, ignoring case and punctuation (e.g. "Ready!" or "wake up please"). */
+export function heardCommand(context: DMContext, command: string): boolean {
+  return containsWord(context.lastResult?.[0]?.utterance ?? "", command);
 }
 /** Plays sound, when the listener is ready. */
 export async function playReady() {

@@ -4,8 +4,8 @@ import type { DMContext, DMEvents } from "./types";
 import { settings, settingsJenny, settingsSilencer } from "../azure_groq/azure_credentials";
 import { askGroq } from "../azure_groq/groq";
 import { getTopIntent, getEntity, getEntityResolution, containsWord} from "./helpers"; // NLU helpers
-import { extractCategory, extractVowel, changeVowels, extractGuess} from "./helpers"; // Game helpers
-import { isGlobalCommand, wordRandomizer, playReady, escapeSsml} from "./helpers"; // General helpers
+import { extractCategory, extractVowel, changeVowels, extractGuess, cleanGuess} from "./helpers"; // Game helpers
+import { isGlobalCommand, wordRandomizer, playReady, escapeSsml, heardCommand} from "./helpers"; // General helpers
 import * as utteranceBuilder from "./utterance_builders"; // Utterance builders
 // Sound effects imports
 import buzzerSound from "../sounds/buzzer.mp3";
@@ -165,6 +165,7 @@ const dmMachine = setup({
         },
         // == Exit ==================================================================================================================================
         Done: {
+          entry: assign({ currentListener: "" }), // Forget the caller, so "Wake up" works after the next click
           initial: "Vowelina",
           states: {
             Vowelina: {
@@ -272,9 +273,9 @@ const dmMachine = setup({
               on: {
                 ASRTTS_READY: [ // Check if safe to redirect
                   { target: "#Boot.Greeting", actions: { type: "clearCache" },
-                  guard: ({ context }) => context.lastResult![0].utterance === "Wake up" && context.currentListener !== "Game"},
+                  guard: ({ context }) => heardCommand(context, "wake up") && context.currentListener !== "Game"},
                   { target: "#Multiplayer.Planner", actions: { type: "clearCache" },
-                  guard: ({ context }) => context.lastResult![0].utterance === "Ready" && context.currentListener === "Game"},
+                  guard: ({ context }) => heardCommand(context, "ready") && context.currentListener === "Game"},
                   { target: "#EndlessListener", actions: { type: "clearCache" }},
                 ]
               },
@@ -336,9 +337,13 @@ const dmMachine = setup({
                 actions: [assign({ temp: "" , target: ""}), {type: "clearCache"}] },
                 { target: "Retry", guard: ({ context }) => getEntityResolution(context, "YesNo") === false,
                 actions: {type: "clearCache"} },
-                { target: "ConfirmPrompt", guard: ({ context }) => !getEntityResolution(context, "YesNo"),
-                  actions: [{type: "raptor.speak", params: { utterance: "Please answer yes or no." } }, assign({confirm: true}) ]},
+                { target: "YesNoReminder", guard: ({ context }) => !getEntityResolution(context, "YesNo"),
+                  actions: assign({confirm: true}) },
               ],
+            },
+            YesNoReminder: { // No yes/no heard: remind the user, then ask again
+              entry: { type: "raptor.speak", params: { utterance: "Please answer yes or no." } },
+              on: { SPEAK_COMPLETE: "ConfirmPrompt" },
             },
             FallbackError: { // If user utterance doesn't satisfy what we are trying to get, ask again.
               entry: { type: "raptor.speak", params: ({ context }) => ({utterance: utteranceBuilder.Fallback(context.target)})},
@@ -561,7 +566,7 @@ const dmMachine = setup({
             Planner: { // Listen if no utterance saved, otherwise redirect
               always: [
                 { target: "#Listener", guard: ({ context }) => !context.lastResult },
-                { target: "#Game", guard: ({ context }) => context.lastResult![0].utterance === "Continue", actions: {type: "clearContext"}},
+                { target: "#Game", guard: ({ context }) => heardCommand(context, "continue"), actions: {type: "clearContext"}},
                 { target: "Transform", guard: ({ context }) => !!context.lastResult },
               ],
             },    
@@ -772,8 +777,8 @@ const dmMachine = setup({
                 }),
                 onDone: {
                   target: "EvaluateGroqGuess",
-                  actions: assign({ targetGuess: ({ event }) => event.output.trim().toLowerCase(),
-                  previousGuesses: ({ context, event }) => [...context.previousGuesses, event.output.trim()],}),
+                  actions: assign({ targetGuess: ({ event }) => cleanGuess(event.output),
+                  previousGuesses: ({ context, event }) => [...context.previousGuesses, cleanGuess(event.output)],}),
                 },
                 onError: { target: "GroqGuessFailed", actions: ({ event }) => console.error("[Groq]", event.error) },
               },
@@ -803,7 +808,7 @@ const dmMachine = setup({
                entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
                 { type: "raptor.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
               ],
-              on: { SPEAK_COMPLETE: {target: "PlayerDescribes", actions: {type: "clearCache"}} },
+              on: { SPEAK_COMPLETE: {target: "PlayerDescribes", actions: [{type: "clearCache"}, assign({ retryReason: ""})]} },
             },
 
             // == Even rounds: Groq describes, Player guesses =======================================================================================
@@ -841,7 +846,7 @@ const dmMachine = setup({
               always: [
                 { target: "WinCue", guard: ({ context }) => context.targetGuess === context.targetWord },
                 { target: "GameOverCue", guard: ({ context }) => context.guessCount >= 4, actions: assign({ retryReason: "maxGuess"})},
-                { target: "RetryCueGroq" },
+                { target: "RetryCueGroq", actions: assign({retryReason: "wrongGuess"}) },
               ],
             },
             RetryCueGroq: { // Play sound for retry
@@ -854,7 +859,7 @@ const dmMachine = setup({
               entry: [assign({ guessCount: ({ context }) => context.guessCount + 1 }),
                 { type: "raptor.speak", params: ({ context }) => ({ utterance: utteranceBuilder.Retry(context.retryReason)})},
               ],
-              on: { SPEAK_COMPLETE: {target: "GroqDescribes", actions: {type: "clearCache"}}},
+              on: { SPEAK_COMPLETE: {target: "GroqDescribes", actions: [{type: "clearCache"}, assign({ retryReason: ""})]}},
             },
 
             // == Shared end states =================================================================================================================
